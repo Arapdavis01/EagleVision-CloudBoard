@@ -1,35 +1,36 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
-import path from 'path';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
+import LoginPage from './pages/LoginPage';
+import Verify2FAPage from './pages/Verify2FAPage';
+import DashboardPage from './pages/DashboardPage';
+import ProjectsPage from './pages/ProjectsPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
+import ProjectFormPage from './pages/ProjectFormPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import Layout from './components/layout/Layout';
 
-import authRoutes from './routes/auth.routes';
-import projectRoutes from './routes/project.routes';
-import paymentRoutes from './routes/payment.routes';
-import dashboardRoutes from './routes/dashboard.routes';
-import { env } from './config/env';
+const queryClient = new QueryClient();
 
-const app = express();
-
-app.use(helmet());
-app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
-app.use(express.json());
-app.use(cookieParser());
-
-// Serve React static files in production
-if (process.env.NODE_ENV === 'production') {
-  const clientBuildPath = path.join(__dirname, '../../client/dist');
-  app.use(express.static(clientBuildPath));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
-  });
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/verify" element={<Verify2FAPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<Layout />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects/new" element={<ProjectFormPage />} />
+              <Route path="/projects/:id" element={<ProjectDetailPage />} />
+              <Route path="/projects/:id/edit" element={<ProjectFormPage />} />
+            </Route>
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster position="bottom-right" />
+    </QueryClientProvider>
+  );
 }
-
-app.use('/api/auth', authRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-
-export default app;
