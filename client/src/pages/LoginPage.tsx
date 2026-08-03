@@ -15,11 +15,8 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await login.mutateAsync({ email, password });
-    // store temp token and redirect to verify page
-    if (result?.tempToken) {
-      navigate('/verify', { state: { tempToken: result.tempToken, email } });
-    }
+    await login.mutateAsync({ email, password });
+    navigate('/');
   };
 
   return (
@@ -30,7 +27,7 @@ export default function LoginPage() {
         <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <Button type="submit" className="w-full" disabled={login.isLoading}>
-          {login.isLoading ? 'Sending code...' : 'Login'}
+          {login.isLoading ? 'Logging in...' : 'Login'}
         </Button>
       </form>
     </div>
