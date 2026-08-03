@@ -3,12 +3,15 @@ import { env } from '../config/env';
 
 export const transporter = nodemailer.createTransport({
   host: env.EMAIL_HOST,
-  port: 465,                // SSL port – not blocked on Render free tier
+  port: 465,                // SSL – not blocked on Render free tier
   secure: true,             // use SSL
   auth: {
     user: env.EMAIL_USER,
     pass: env.EMAIL_PASS,
   },
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
 });
 
 export async function send2FACode(email: string, code: string) {
