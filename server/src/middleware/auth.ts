@@ -6,14 +6,17 @@ export interface AuthRequest extends Request {
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
-  const token = req.cookies?.accessToken;
-  if (!token) return res.status(401).json({ message: 'Not authenticated' });
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Not authenticated' });
+  }
 
+  const token = authHeader.split(' ')[1];
   try {
-    const payload = verifyAccessToken(token);
+    const payload = verifyAccessToken(token) as { userId: string };
     req.userId = payload.userId;
     next();
   } catch {
-    res.status(401).json({ message: 'Token invalid or expired' });
+    return res.status(401).json({ message: 'Token invalid or expired' });
   }
 }
