@@ -7,43 +7,37 @@ import { AuthRequest, authenticate } from '../middleware/auth';
 
 const router = Router();
 
-// Login: validate credentials, return JWT cookie directly
+// Login: validate credentials, return access token in response body
 router.post('/login', rateLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { email, password } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+    if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
-    // Issue access token (15 minutes)
     const accessToken = signAccessToken(user.id, '15m');
 
-    res.cookie('accessToken', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 15 * 60 * 1000, // 15 minutes
+    // Send token in response body (no cookie)
+    res.json({
+      message: 'Authenticated',
+      user: { id: user.id, email: user.email },
+      accessToken,
     });
-
-    res.json({ message: 'Authenticated', user: { id: user.id, email: user.email } });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
+// Logout (no-op on server, client just deletes token)
 router.post('/logout', (_req, res) => {
-  res.clearCookie('accessToken');
   res.json({ message: 'Logged out' });
 });
 
+// Return current user
 router.get('/me', authenticate, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({
