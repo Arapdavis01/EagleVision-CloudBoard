@@ -12,6 +12,9 @@ import { env } from './config/env';
 
 const app = express();
 
+// Trust the first proxy (Render) – required for express-rate-limit
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
 app.use(express.json());
@@ -28,7 +31,6 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
 // ----- SPA fallback (for client-side routing) -----
-// Any request that is not an API route and not a static file will return index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
