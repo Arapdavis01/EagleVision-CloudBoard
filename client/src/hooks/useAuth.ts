@@ -15,6 +15,7 @@ export function useAuth() {
     },
     retry: false,
     staleTime: Infinity,
+    enabled: !!localStorage.getItem('accessToken'), // only run if token exists
   });
 }
 
@@ -23,24 +24,19 @@ export function useLogin() {
   return useMutation({
     mutationFn: async (data: { email: string; password: string }) => {
       const res = await api.post('/auth/login', data);
-      return res.data; // { tempToken }
+      return res.data; // { user, accessToken }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      localStorage.setItem('accessToken', data.accessToken);
       queryClient.invalidateQueries(['auth']);
     },
   });
 }
 
 export function useVerify() {
-  const queryClient = useQueryClient();
+  // Not used anymore, but keep empty to avoid import errors
   return useMutation({
-    mutationFn: async (data: { tempToken: string; code: string }) => {
-      const res = await api.post('/auth/verify', data);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['auth']);
-    },
+    mutationFn: async () => {},
   });
 }
 
@@ -51,6 +47,7 @@ export function useLogout() {
       await api.post('/auth/logout');
     },
     onSuccess: () => {
+      localStorage.removeItem('accessToken');
       queryClient.clear();
     },
   });
