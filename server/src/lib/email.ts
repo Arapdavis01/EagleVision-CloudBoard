@@ -3,8 +3,8 @@ import { env } from '../config/env';
 
 export const transporter = nodemailer.createTransport({
   host: env.EMAIL_HOST,
-  port: env.EMAIL_PORT,
-  secure: false,
+  port: 465,                // SSL port – not blocked on Render free tier
+  secure: true,             // use SSL
   auth: {
     user: env.EMAIL_USER,
     pass: env.EMAIL_PASS,
