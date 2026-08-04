@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { formatCurrency } from '../lib/utils';
 import { Plus, Trash2 } from 'lucide-react';
