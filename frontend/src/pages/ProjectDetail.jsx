@@ -1,5 +1,5 @@
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import StatusBadge from '../components/uptime/StatusBadge';
 import { Line } from 'react-chartjs-2';
