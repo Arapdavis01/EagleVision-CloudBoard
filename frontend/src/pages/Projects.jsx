@@ -20,30 +20,46 @@ export default function Projects() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-4">Projects</h2>
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search..."
-          className="pl-9 pr-4 py-2 bg-gray-800 rounded w-full md:w-64 text-sm"
-          value={filterText}
-          onChange={e => setFilterText(e.target.value)}
-        />
-      </div>
-      <div className="bg-gray-900 rounded-xl overflow-hidden">
-        <div className="flex items-center border-b border-gray-800 px-4 py-2 text-xs uppercase text-gray-400">
-          <span className="flex-1">Name</span>
-          <span className="w-40 hidden md:block">Client</span>
-          <span className="w-32">Status</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+        <h2 className="text-2xl font-bold">Projects</h2>
+        <div className="relative w-full sm:w-72">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search projects..."
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-800 border border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={filterText}
+            onChange={e => setFilterText(e.target.value)}
+          />
         </div>
-        <div className="max-h-[600px] overflow-y-auto">
+      </div>
+
+      <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl overflow-hidden">
+        <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-white/5">
+          <span className="col-span-5">Name</span>
+          <span className="col-span-3 hidden md:block">Client</span>
+          <span className="col-span-3 md:col-span-2">Status</span>
+          <span className="col-span-2 hidden md:block">Latency</span>
+        </div>
+        <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
+          {filtered.length === 0 && (
+            <div className="px-6 py-8 text-center text-gray-500">No projects found.</div>
+          )}
           {filtered.map(p => (
-            <div key={p.id} className="flex items-center border-b border-gray-800 px-4 py-3 hover:bg-gray-800 cursor-pointer"
-              onClick={() => navigate(`/projects/${p.id}`)}>
-              <span className="flex-1 font-medium">{p.name}</span>
-              <span className="w-40 hidden md:block text-gray-400">{p.client_name}</span>
-              <span className="w-32"><StatusBadge status={p.liveStatus?.status} /></span>
+            <div
+              key={p.id}
+              className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-white/5 cursor-pointer transition-colors items-center"
+              onClick={() => navigate(`/projects/${p.id}`)}
+            >
+              <div className="col-span-5">
+                <p className="font-medium">{p.name}</p>
+                {p.client_name && <p className="text-xs text-gray-400 md:hidden">{p.client_name}</p>}
+              </div>
+              <div className="col-span-3 hidden md:block text-gray-400">{p.client_name || '—'}</div>
+              <div className="col-span-3 md:col-span-2"><StatusBadge status={p.liveStatus?.status} /></div>
+              <div className="col-span-2 hidden md:block text-gray-400">
+                {p.liveStatus?.latency ? `${p.liveStatus.latency}ms` : '—'}
+              </div>
             </div>
           ))}
         </div>
