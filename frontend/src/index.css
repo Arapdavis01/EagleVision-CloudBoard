@@ -2,105 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* =========== BASE LAYER =========== */
-@layer base {
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  body {
-    @apply bg-gray-950 text-white antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background-image:
-      radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
-    background-attachment: fixed;
-  }
-
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.02);
-  }
-  ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
+body {
+  @apply bg-gray-950 text-white antialiased;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.04) 0%, transparent 50%);
+  background-attachment: fixed;
 }
 
-/* =========== COMPONENT LAYER =========== */
-@layer components {
-  /* Glass card effect */
-  .glass-card {
-    @apply bg-gray-900/80 backdrop-blur-md border border-white/5 rounded-xl shadow-lg;
-  }
-
-  /* Hover lift for cards */
-  .card-lift {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  .card-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-  }
-
-  /* Gradient border top for KPI cards */
-  .kpi-card {
-    @apply glass-card card-lift p-6 relative overflow-hidden;
-  }
-  .kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    border-radius: 4px 4px 0 0;
-  }
-  .kpi-card.blue::before { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
-  .kpi-card.green::before { background: linear-gradient(90deg, #10b981, #34d399); }
-  .kpi-card.indigo::before { background: linear-gradient(90deg, #6366f1, #a78bfa); }
-  .kpi-card.red::before { background: linear-gradient(90deg, #ef4444, #f87171); }
-
-  /* Table styling */
-  .table-container {
-    @apply glass-card overflow-hidden;
-  }
-  .table-header {
-    @apply text-xs font-semibold uppercase tracking-wider text-gray-400 bg-gray-800/50;
-  }
-  .table-row {
-    @apply border-b border-white/5 transition-colors;
-  }
-  .table-row:hover {
-    @apply bg-white/5;
-  }
-
-  /* Badge / status pill */
-  .status-badge {
-    @apply inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium;
-  }
-  .status-up {
-    @apply bg-green-500/10 text-green-400;
-  }
-  .status-down {
-    @apply bg-red-500/10 text-red-400;
-  }
-  .status-unknown {
-    @apply bg-gray-500/10 text-gray-400;
-  }
-
-  /* Red alert banner */
-  .alert-banner {
-    background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%);
-    @apply shadow-lg;
-  }
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
