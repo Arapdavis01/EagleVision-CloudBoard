@@ -1,3 +1,4 @@
+import React from 'react';
 import { useAlerts } from '../contexts/AlertContext';
 
 export default function Alerts() {
