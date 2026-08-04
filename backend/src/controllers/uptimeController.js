@@ -1,6 +1,5 @@
 const pool = require('../config/db');
 
-// Get the latest status for every project (most recent log per project)
 exports.getStatuses = async (req, res) => {
   try {
     const query = `
@@ -28,7 +27,6 @@ exports.getStatuses = async (req, res) => {
   }
 };
 
-// History endpoint unchanged
 exports.getHistory = async (req, res) => {
   const { projectId } = req.params;
   const { range = '24h' } = req.query;
