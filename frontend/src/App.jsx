@@ -26,7 +26,12 @@ function App() {
               <Route path="alerts" element={<Alerts />} />
             </Route>
           </Routes>
-          <Toaster position="top-right" />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: { background: '#1f2937', color: '#f3f4f6', border: '1px solid #374151' },
+            }}
+          />
         </AlertProvider>
       </AuthProvider>
     </BrowserRouter>
