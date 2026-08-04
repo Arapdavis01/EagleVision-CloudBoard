@@ -9,10 +9,14 @@ export const AlertProvider = ({ children }) => {
   const checkStatuses = useCallback(async () => {
     try {
       const res = await api.get('/uptime/status');
-      const down = res.data.filter(p => p.status === 'down');
+      // Ensure we have an array and filter safely
+      const down = Array.isArray(res.data)
+        ? res.data.filter(p => p && p.status === 'down')
+        : [];
       setDownProjects(down);
     } catch (err) {
-      console.error('Failed to fetch statuses');
+      // Silently fail – don't let the UI crash
+      console.error('Alert check failed', err);
     }
   }, []);
 
