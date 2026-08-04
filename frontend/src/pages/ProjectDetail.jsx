@@ -43,15 +43,15 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-5">
+        <div className="glass p-5">
           <p className="text-gray-400 text-sm">Latency</p>
           <p className="text-2xl font-bold mt-1">{project.liveStatus?.latency || '—'} ms</p>
         </div>
-        <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-5">
+        <div className="glass p-5">
           <p className="text-gray-400 text-sm">Status Code</p>
           <p className="text-2xl font-bold mt-1">{project.liveStatus?.status_code || '—'}</p>
         </div>
-        <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-5">
+        <div className="glass p-5">
           <p className="text-gray-400 text-sm">Last Checked</p>
           <p className="text-2xl font-bold mt-1">
             {project.liveStatus?.checked_at ? new Date(project.liveStatus.checked_at).toLocaleString() : '—'}
@@ -59,7 +59,7 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-6">
+      <div className="glass p-6">
         <h3 className="text-lg font-semibold mb-4">Response Time History</h3>
         <div className="h-64">
           <Line data={chartData} options={{
@@ -75,7 +75,7 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-5">
+        <div className="glass p-5">
           <h4 className="font-semibold mb-3">Details</h4>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-gray-400">Location</span><span>{project.location || '—'}</span></div>
@@ -84,7 +84,7 @@ export default function ProjectDetail() {
             <div className="flex justify-between"><span className="text-gray-400">Hosting</span><span>{project.hosting_platform || '—'}</span></div>
           </div>
         </div>
-        <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-5">
+        <div className="glass p-5">
           <h4 className="font-semibold mb-3">Description</h4>
           <p className="text-gray-400 text-sm">{project.description || 'No description'}</p>
         </div>
