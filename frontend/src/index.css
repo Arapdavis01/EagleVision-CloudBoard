@@ -2,15 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========== FORCE DARK BACKGROUND =========== */
+html,
+body {
+  background-color: #0b0f19 !important; /* fallback if Tailwind doesn't apply */
+  color: #ffffff;
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Apply Tailwind classes globally for dark mode */
 body {
   @apply bg-gray-950 text-white antialiased;
   background-image:
-    radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.04) 0%, transparent 50%);
+    radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
   background-attachment: fixed;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+/* Custom scrollbar (dark theme) */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* Glassmorphism card base */
+.glass {
+  background: rgba(17, 25, 40, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+}
+
+/* Gradient borders for KPI cards */
+.kpi-card {
+  @apply glass p-5 relative overflow-hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+.kpi-card.blue::before { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+.kpi-card.green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.kpi-card.indigo::before { background: linear-gradient(90deg, #6366f1, #a78bfa); }
+.kpi-card.red::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+
+/* Modern button gradient */
+.btn-primary {
+  @apply bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 
+         text-white font-semibold py-2.5 px-6 rounded-lg shadow-lg shadow-blue-600/20 
+         transition-all disabled:opacity-50;
+}
