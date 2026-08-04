@@ -34,7 +34,7 @@ export default function Projects() {
         </div>
       </div>
 
-      <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl overflow-hidden">
+      <div className="glass overflow-hidden">
         <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-white/5">
           <span className="col-span-5">Name</span>
           <span className="col-span-3 hidden md:block">Client</span>
