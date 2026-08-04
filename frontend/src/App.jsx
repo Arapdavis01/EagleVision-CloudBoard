@@ -1,11 +1,17 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { AlertProvider } from './contexts/AlertContext';
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="*" element={<h1 style={{ color: 'white', padding: 20 }}>App Loaded Successfully</h1>} />
-      </Routes>
+      <AuthProvider>
+        <AlertProvider>
+          <Routes>
+            <Route path="*" element={<h1 style={{ color: 'white', padding: 20 }}>Providers OK</h1>} />
+          </Routes>
+        </AlertProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
