@@ -2,76 +2,228 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Force dark background everywhere */
+/* ========== EAGLEVISION THEME VARIABLES ========== */
+:root {
+  --primary: #1e3a5f;
+  --primary-dark: #0f2440;
+  --accent: #f0b429;
+  --accent-dark: #c98d1a;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
+  --white: #ffffff;
+  --gray-400: #9ca3af;
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --ease-spring: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ---------- Base ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html, body, #root {
-  background-color: #0b0f19 !important;
+  background-color: #0b0f19;
   color: #ffffff;
   margin: 0;
   padding: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
 }
 
 body {
   @apply bg-gray-950 text-white antialiased;
   background-image:
     radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.07) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(16,185,129,0.05) 0%, transparent 50%);
+    radial-gradient(ellipse at 80% 20%, rgba(240,180,41,0.06) 0%, transparent 50%);
   background-attachment: fixed;
 }
 
-/* Custom scrollbar */
+/* ---------- Scrollbar ---------- */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
-/* Glass card */
+/* ---------- Glass card (reusable) ---------- */
 .glass {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  overflow: hidden;
+}
+.glass:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-xl);
 }
 
-/* KPI card */
-.kpi-card {
-  @apply glass p-5 relative overflow-hidden transition-transform duration-200;
+/* ---------- KPI / stat cards ---------- */
+.stat-card {
+  @apply p-5 relative overflow-hidden rounded-2xl text-white;
+  background: linear-gradient(135deg, var(--primary) 0%, #1e3a5f 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  transition: transform 0.3s var(--ease-spring), box-shadow 0.3s;
 }
-.kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-}
-.kpi-card::before {
+.stat-card::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
+  top: -30%;
+  right: -30%;
+  width: 160%;
+  height: 160%;
+  background: radial-gradient(circle, rgba(240,180,41,0.12), transparent 70%);
+  animation: statShimmer 6s infinite linear;
+  pointer-events: none;
 }
-.kpi-card.blue::before   { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
-.kpi-card.green::before  { background: linear-gradient(90deg, #10b981, #34d399); }
-.kpi-card.indigo::before { background: linear-gradient(90deg, #6366f1, #a78bfa); }
-.kpi-card.red::before    { background: linear-gradient(90deg, #ef4444, #f87171); }
+.stat-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: var(--shadow-xl);
+}
+.stat-label {
+  font-size: 0.875rem;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+}
 
-/* Table styling */
-.table-glass {
-  @apply glass overflow-hidden;
-}
-.table-glass th {
-  @apply text-xs uppercase tracking-wider text-gray-400 px-6 py-3 text-left;
-}
-.table-glass td {
-  @apply px-6 py-4;
-}
-.table-glass tbody tr {
-  @apply border-b border-white/5 hover:bg-white/5 transition-colors;
+/* ---------- Colored top border variations (optional) ---------- */
+.stat-card.blue::before { background: radial-gradient(circle, rgba(59,130,246,0.2), transparent 70%); }
+.stat-card.green::before { background: radial-gradient(circle, rgba(16,185,129,0.2), transparent 70%); }
+.stat-card.indigo::before { background: radial-gradient(circle, rgba(99,102,241,0.2), transparent 70%); }
+.stat-card.red::before { background: radial-gradient(circle, rgba(239,68,68,0.2), transparent 70%); }
+
+@keyframes statShimmer {
+  0% { transform: translate(-20%, -20%) rotate(0deg); }
+  100% { transform: translate(20%, 20%) rotate(360deg); }
 }
 
-/* Status badge */
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-lg);
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-spring);
+  position: relative;
+  overflow: hidden;
+  text-decoration: none;
+  color: white;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+}
+.btn-primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+.btn-secondary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+}
+.btn-danger {
+  background: linear-gradient(135deg, var(--danger), #dc2626);
+}
+.btn-success {
+  background: linear-gradient(135deg, var(--success), #059669);
+}
+
+/* ---------- Tables ---------- */
+.table-modern {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.table-modern th {
+  background: linear-gradient(135deg, rgba(30,58,95,0.3), rgba(240,180,41,0.1));
+  color: white;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  padding: 1rem 1.25rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.table-modern td {
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: #cbd5e1;
+}
+.table-modern tbody tr:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+/* ---------- Status badges ---------- */
 .status-badge {
   @apply inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium;
 }
-.status-badge.up   { @apply bg-green-500/10 text-green-400; }
-.status-badge.down { @apply bg-red-500/10 text-red-400; }
-.status-badge.unknown { @apply bg-gray-500/10 text-gray-400; }
+.status-badge.up {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.status-badge.down {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.status-badge.unknown {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* ---------- Input fields ---------- */
+.input-modern {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-lg);
+  color: white;
+  font-size: 0.875rem;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.input-modern:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(240,180,41,0.2);
+}
+
+/* ---------- Red banner (alerts) ---------- */
+.alert-banner {
+  background: linear-gradient(90deg, #dc2626, #b91c1c);
+  color: white;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideDown 0.3s ease;
+}
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
