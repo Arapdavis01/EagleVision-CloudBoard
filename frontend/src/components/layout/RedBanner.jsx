@@ -1,3 +1,4 @@
+import React from 'react';
 import { useAlerts } from '../../contexts/AlertContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
