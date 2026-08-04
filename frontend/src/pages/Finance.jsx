@@ -28,23 +28,20 @@ export default function Finance() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-6 border-t-4 border-t-green-500">
+      <div className="glass p-6 border-t-4 border-t-green-500">
         <p className="text-gray-400">Total Revenue</p>
         <p className="text-4xl font-bold mt-1">{formatCurrency(total)}</p>
       </div>
 
       <div className="flex items-center justify-between">
         <h3 className="text-xl font-semibold">Sales Records</h3>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-600/20"
-        >
+        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-600/20">
           <Plus size={16} /> Record Sale
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <form onSubmit={handleSubmit} className="glass p-4 grid grid-cols-1 sm:grid-cols-4 gap-3">
           <select required value={form.project_id} onChange={e => setForm({...form, project_id: e.target.value})} className="bg-gray-800 border border-white/10 rounded-lg px-3 py-2.5 text-sm">
             <option value="">Select project</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -58,7 +55,7 @@ export default function Finance() {
         </form>
       )}
 
-      <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl overflow-hidden">
+      <div className="glass overflow-hidden">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-white/5 text-xs uppercase tracking-wider text-gray-400">
