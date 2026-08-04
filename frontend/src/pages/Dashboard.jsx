@@ -7,12 +7,8 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Toolti
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-const KpiCard = ({ label, value, gradient }) => (
-  <motion.div
-    whileHover={{ scale: 1.02 }}
-    className="relative bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-5 overflow-hidden group"
-  >
-    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${gradient}`} />
+const KpiCard = ({ label, value, color }) => (
+  <motion.div whileHover={{ scale: 1.02 }} className={`kpi-card ${color}`}>
     <p className="text-gray-400 text-sm">{label}</p>
     <p className="text-3xl font-bold mt-2">{value}</p>
   </motion.div>
@@ -62,13 +58,13 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Total Projects" value={stats.projects} gradient="from-blue-500 to-purple-500" />
-        <KpiCard label="Total Revenue" value={formatCurrency(stats.revenue)} gradient="from-green-500 to-teal-500" />
-        <KpiCard label="Avg Uptime" value={`${stats.uptime}%`} gradient="from-indigo-500 to-purple-500" />
-        <KpiCard label="Critical Alerts" value={critical} gradient="from-red-500 to-pink-500" />
+        <KpiCard label="Total Projects" value={stats.projects} color="blue" />
+        <KpiCard label="Total Revenue" value={formatCurrency(stats.revenue)} color="green" />
+        <KpiCard label="Avg Uptime" value={`${stats.uptime}%`} color="indigo" />
+        <KpiCard label="Critical Alerts" value={critical} color="red" />
       </div>
 
-      <div className="bg-gray-900/60 backdrop-blur-md border border-white/5 rounded-xl p-6">
+      <div className="glass p-6">
         <h3 className="text-lg font-semibold mb-4">System Response Time (Last 24h)</h3>
         <div className="h-64">
           <Bar
