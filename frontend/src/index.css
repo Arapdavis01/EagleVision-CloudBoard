@@ -2,42 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-/* =========== FORCE DARK BACKGROUND =========== */
-html,
-body {
-  background-color: #0b0f19 !important; /* fallback if Tailwind doesn't apply */
+/* Force dark background everywhere */
+html, body, #root {
+  background-color: #0b0f19 !important;
   color: #ffffff;
-  font-family: 'Inter', system-ui, sans-serif;
   margin: 0;
   padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* Apply Tailwind classes globally for dark mode */
 body {
   @apply bg-gray-950 text-white antialiased;
   background-image:
-    radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+    radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(16,185,129,0.05) 0%, transparent 50%);
   background-attachment: fixed;
 }
 
-/* Custom scrollbar (dark theme) */
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
-/* Glassmorphism card base */
+/* Glass card */
 .glass {
-  background: rgba(17, 25, 40, 0.7);
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255,255,255,0.05);
   border-radius: 1rem;
 }
 
-/* Gradient borders for KPI cards */
+/* KPI card */
 .kpi-card {
-  @apply glass p-5 relative overflow-hidden;
+  @apply glass p-5 relative overflow-hidden transition-transform duration-200;
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
 }
 .kpi-card::before {
   content: '';
@@ -47,14 +49,29 @@ body {
   right: 0;
   height: 3px;
 }
-.kpi-card.blue::before { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
-.kpi-card.green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.kpi-card.blue::before   { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+.kpi-card.green::before  { background: linear-gradient(90deg, #10b981, #34d399); }
 .kpi-card.indigo::before { background: linear-gradient(90deg, #6366f1, #a78bfa); }
-.kpi-card.red::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+.kpi-card.red::before    { background: linear-gradient(90deg, #ef4444, #f87171); }
 
-/* Modern button gradient */
-.btn-primary {
-  @apply bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 
-         text-white font-semibold py-2.5 px-6 rounded-lg shadow-lg shadow-blue-600/20 
-         transition-all disabled:opacity-50;
+/* Table styling */
+.table-glass {
+  @apply glass overflow-hidden;
 }
+.table-glass th {
+  @apply text-xs uppercase tracking-wider text-gray-400 px-6 py-3 text-left;
+}
+.table-glass td {
+  @apply px-6 py-4;
+}
+.table-glass tbody tr {
+  @apply border-b border-white/5 hover:bg-white/5 transition-colors;
+}
+
+/* Status badge */
+.status-badge {
+  @apply inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium;
+}
+.status-badge.up   { @apply bg-green-500/10 text-green-400; }
+.status-badge.down { @apply bg-red-500/10 text-red-400; }
+.status-badge.unknown { @apply bg-gray-500/10 text-gray-400; }
