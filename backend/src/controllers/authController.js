@@ -16,12 +16,18 @@ exports.login = async (req, res) => {
     const token = jwt.sign({ adminId: admin.id }, secret, { expiresIn: '1d' });
     res.cookie(cookieName, token, cookieOptions);
 
-    // Update last login + audit log (optional, catch errors so they don't crash)
+    // Optional audit logging – don't let it crash the request
     try {
-      await pool.query('UPDATE admins SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1 WHERE id = $2', [req.ip, admin.id]);
-      await pool.query('INSERT INTO admin_audit_logs (admin_id, action, ip_address, user_agent) VALUES ($1,$2,$3,$4)', [admin.id, 'LOGIN', req.ip, req.headers['user-agent']]);
+      await pool.query(
+        'UPDATE admins SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1 WHERE id = $2',
+        [req.ip, admin.id]
+      );
+      await pool.query(
+        'INSERT INTO admin_audit_logs (admin_id, action, ip_address, user_agent) VALUES ($1,$2,$3,$4)',
+        [admin.id, 'LOGIN', req.ip, req.headers['user-agent']]
+      );
     } catch (auditErr) {
-      console.error('Audit log error:', auditErr);
+      console.error('Audit error:', auditErr);
     }
 
     return res.json({ success: true });
