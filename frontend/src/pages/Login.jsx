@@ -21,13 +21,13 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#0b0f19] p-4">
       <motion.form
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         onSubmit={handleSubmit}
-        className="bg-gray-900/80 backdrop-blur-md border border-white/5 p-8 rounded-2xl shadow-2xl w-full max-w-md space-y-6"
+        className="glass p-8 rounded-2xl shadow-2xl w-full max-w-md space-y-6"
       >
         <div className="text-center">
           <span className="text-4xl">🦅</span>
