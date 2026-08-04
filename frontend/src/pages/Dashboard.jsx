@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { formatCurrency } from '../lib/utils';
 import { motion } from 'framer-motion';
@@ -30,7 +30,6 @@ export default function Dashboard() {
     }
     fetchData();
 
-    // Fake response time data
     const labels = [];
     const values = [];
     const now = new Date();
