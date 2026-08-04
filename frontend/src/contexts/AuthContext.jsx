@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
@@ -39,7 +39,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center bg-gray-950 text-white">Loading...</div>;
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center bg-gray-950 text-white">
+      Loading...
+    </div>
+  );
 
   return (
     <AuthContext.Provider value={{ adminId, login, logout }}>
