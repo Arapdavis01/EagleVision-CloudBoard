@@ -5,21 +5,38 @@ import { Card, Title, Metric, AreaChart } from '@tremor/react';
 import { motion } from 'framer-motion';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ projects: 0, revenue: 0, uptime: 0 });
+  const [stats, setStats] = useState({
+    projects: 0,
+    revenue: 0,
+    uptimePercent: 0
+  });
   const [chartData, setChartData] = useState([]);
 
   useEffect(() => {
-    // Fetch number of projects
-    api.get('/projects').then(res => setStats(prev => ({ ...prev, projects: res.data.length })));
-    // Fetch total revenue
-    api.get('/finance/sales').then(res => setStats(prev => ({ ...prev, revenue: res.data.total })));
-    // Fetch uptime statuses
-    api.get('/uptime/status').then(res => {
-      const total = res.data.length;
-      const up = res.data.filter(p => p.status === 'up').length;
-      setStats(prev => ({ ...prev, uptime: total ? ((up / total) * 100).toFixed(1) : 0 }));
-    });
-    // Placeholder chart data (would come from /uptime/history endpoint)
+    async function fetchStats() {
+      try {
+        const [projRes, finRes, uptRes] = await Promise.all([
+          api.get('/projects'),
+          api.get('/finance/sales'),
+          api.get('/uptime/status')
+        ]);
+        const totalProjects = projRes.data.length;
+        const totalRevenue = finRes.data.total || 0;
+        const upCount = uptRes.data.filter(p => p.status === 'up').length;
+        const uptimePercent = totalProjects ? (upCount / totalProjects) * 100 : 0;
+
+        setStats({
+          projects: totalProjects,
+          revenue: totalRevenue,
+          uptimePercent: Math.round(uptimePercent * 10) / 10  // one decimal, still number
+        });
+      } catch (err) {
+        console.error('Dashboard fetch error', err);
+      }
+    }
+    fetchStats();
+
+    // Placeholder chart data
     const now = new Date();
     const fakeData = Array.from({ length: 24 }, (_, i) => {
       const time = new Date(now - (23 - i) * 60 * 60000);
@@ -31,35 +48,37 @@ export default function Dashboard() {
     setChartData(fakeData);
   }, []);
 
+  const criticalAlerts = stats.projects - Math.round((stats.uptimePercent / 100) * stats.projects);
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.div whileHover={{ scale: 1.02 }}>
-          <Card decoration="top" decorationColor="blue">
+          <Card className="bg-gray-800 border-gray-700" decoration="top" decorationColor="blue">
             <Title>Total Projects</Title>
             <Metric>{stats.projects}</Metric>
           </Card>
         </motion.div>
         <motion.div whileHover={{ scale: 1.02 }}>
-          <Card decoration="top" decorationColor="green">
+          <Card className="bg-gray-800 border-gray-700" decoration="top" decorationColor="green">
             <Title>Total Revenue</Title>
             <Metric>{formatCurrency(stats.revenue)}</Metric>
           </Card>
         </motion.div>
         <motion.div whileHover={{ scale: 1.02 }}>
-          <Card decoration="top" decorationColor="indigo">
+          <Card className="bg-gray-800 border-gray-700" decoration="top" decorationColor="indigo">
             <Title>Avg Uptime</Title>
-            <Metric>{stats.uptime}%</Metric>
+            <Metric>{stats.uptimePercent}%</Metric>
           </Card>
         </motion.div>
         <motion.div whileHover={{ scale: 1.02 }}>
-          <Card decoration="top" decorationColor="red">
+          <Card className="bg-gray-800 border-gray-700" decoration="top" decorationColor="red">
             <Title>Critical Alerts</Title>
-            <Metric>{stats.projects - Math.round(stats.uptime * stats.projects / 100)}</Metric>
+            <Metric>{criticalAlerts}</Metric>
           </Card>
         </motion.div>
       </div>
-      <Card>
+      <Card className="bg-gray-800 border-gray-700">
         <Title>System Response Time (Last 24h)</Title>
         <AreaChart
           data={chartData}
