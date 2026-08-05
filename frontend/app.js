@@ -1,14 +1,15 @@
-/* ========== EAGLEVISION PRO APP – with Features 1‑8 ========== */
+/* ========== EAGLEVISION PRO APP – Full Featured ========== */
 const API = 'https://eaglevision-api.onrender.com/api';
 let currentPage = 'dashboard';
 let viewMode = 'grid';
 let charts = {};
 let projectsCache = [];
 
-// ---------- HELPERS ----------
+/* ---------- HELPERS ---------- */
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount || 0);
 }
+
 async function fetchJSON(url, options = {}) {
   const fetchOptions = {
     ...options,
@@ -20,7 +21,7 @@ async function fetchJSON(url, options = {}) {
   return res.json();
 }
 
-// ---------- MODAL SYSTEM ----------
+/* ---------- MODAL SYSTEM ---------- */
 function showModal(html) {
   document.getElementById('modal-content').innerHTML = html;
   document.getElementById('modal-overlay').classList.remove('hidden');
@@ -30,14 +31,22 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   document.getElementById('modal-content').classList.add('hidden');
 }
-document.getElementById('modal-overlay').addEventListener('click', closeModal);
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('modal-overlay').addEventListener('click', closeModal);
+});
 
-// ---------- AUTH ----------
-async function checkAuth() { try { await fetchJSON(`${API}/auth/check`); return true; } catch { return false; } }
-async function login(email, password) { return fetchJSON(`${API}/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) }); }
-async function logout() { try { await fetchJSON(`${API}/auth/logout`, { method: 'POST' }); } finally { location.reload(); } }
+/* ---------- AUTH ---------- */
+async function checkAuth() {
+  try { await fetchJSON(`${API}/auth/check`); return true; } catch { return false; }
+}
+async function login(email, password) {
+  return fetchJSON(`${API}/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) });
+}
+async function logout() {
+  try { await fetchJSON(`${API}/auth/logout`, { method: 'POST' }); } finally { location.reload(); }
+}
 
-// ---------- ROUTING ----------
+/* ---------- ROUTING ---------- */
 function navigate(page, param = null) {
   currentPage = page;
   if (param) window.history.pushState(null, '', `?id=${param}`);
@@ -45,27 +54,29 @@ function navigate(page, param = null) {
   renderApp();
 }
 
-// ---------- CHART CLEANUP ----------
+/* ---------- CHART CLEANUP ---------- */
 function destroyCharts() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
 
-// ---------- SIDEBAR TOGGLE ----------
+/* ---------- SIDEBAR TOGGLE ---------- */
 function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('collapsed'); }
 
-// ---------- LOGIN (unchanged) ----------
+/* ---------- LOGIN PAGE ---------- */
 function renderLogin() {
   document.getElementById('app').innerHTML = `
     <div class="login-container" style="display:flex;align-items:center;justify-content:center;height:100vh;">
       <div class="glass" style="padding:2.5rem;width:100%;max-width:400px;">
-        <h2 style="text-align:center;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:center;gap:0.5rem;">
+        <h2 style="text-align:center;margin-bottom:1.5rem;">
           <i class="fas fa-binoculars" style="color:var(--accent);"></i> EagleVision
         </h2>
         <form id="loginForm">
-          <label style="display:block;margin-bottom:0.3rem;font-weight:600;">Email</label>
-          <input type="email" id="loginEmail" required style="width:100%;padding:0.7rem;margin-bottom:1rem;background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);border-radius:var(--radius-lg);color:white;" />
-          <label style="display:block;margin-bottom:0.3rem;font-weight:600;">Password</label>
-          <input type="password" id="loginPassword" required style="width:100%;padding:0.7rem;margin-bottom:1.5rem;background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);border-radius:var(--radius-lg);color:white;" />
-          <div id="loginError" style="color:var(--danger);font-size:0.85rem;margin-bottom:1rem;min-height:1.2em;"></div>
-          <button type="submit" class="btn btn-primary" style="width:100%;" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Sign In</button>
+          <label>Email</label>
+          <input type="email" id="loginEmail" required class="input-modern" />
+          <label>Password</label>
+          <input type="password" id="loginPassword" required class="input-modern" />
+          <div id="loginError" style="color:var(--danger);font-size:0.85rem;min-height:1.2em;"></div>
+          <button type="submit" class="btn btn-primary" style="width:100%; margin-top:1rem;" id="loginBtn">
+            <i class="fas fa-sign-in-alt"></i> Sign In
+          </button>
         </form>
       </div>
     </div>
@@ -91,21 +102,28 @@ function renderLogin() {
   });
 }
 
-// ---------- DASHBOARD (with upgrade reminders) ----------
+/* ---------- DASHBOARD ---------- */
 async function renderDashboard() {
   destroyCharts();
-  const proj = await fetchJSON(`${API}/projects`).catch(() => []);
+  const [proj, fin, upt] = await Promise.all([
+    fetchJSON(`${API}/projects`).catch(() => []),
+    fetchJSON(`${API}/finance/sales`).catch(() => ({ total: 0, sales: [] })),
+    fetchJSON(`${API}/uptime/status`).catch(() => [])
+  ]);
   projectsCache = proj;
-  const fin = await fetchJSON(`${API}/finance/sales`).catch(() => ({ total: 0, sales: [] }));
-  const upt = await fetchJSON(`${API}/uptime/status`).catch(() => []);
   const totalProjects = proj.length;
   const liveProjects = upt.filter(p => p.status === 'up').length;
   const clients = [...new Set(proj.map(p => p.client_name).filter(Boolean))];
   const totalRevenue = fin.total || 0;
 
-  // Upgrade reminders: projects with next_review_date within 30 days or past
+  // Upgrade reminders
   const now = new Date();
-  const upcomingReviews = proj.filter(p => p.next_review_date && new Date(p.next_review_date) <= new Date(now.getTime() + 30*24*60*60*1000));
+  const upcomingReviews = proj.filter(p => {
+    if (!p.next_review_date) return false;
+    const reviewDate = new Date(p.next_review_date);
+    const limitDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return reviewDate <= limitDate;
+  });
 
   const main = document.querySelector('.main-content');
   main.innerHTML = `
@@ -121,28 +139,36 @@ async function renderDashboard() {
       <button class="btn btn-success" onclick="openSaleModal()"><i class="fas fa-money-bill-wave"></i> Record Sale</button>
     </div>
     ${upcomingReviews.length > 0 ? `
-      <div style="background:var(--glass-bg); backdrop-filter:blur(12px); border-radius:var(--radius-xl); padding:1.5rem; margin-bottom:2rem;">
-        <h3><i class="fas fa-clock"></i> Upcoming/Overdue Reviews</h3>
+      <div class="glass" style="padding:1.5rem; margin-bottom:2rem;">
+        <h3><i class="fas fa-clock"></i> Upcoming / Overdue Reviews</h3>
         <ul style="margin-top:1rem; list-style:none;">
-          ${upcomingReviews.map(p => `<li style="padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-            <span>${p.name}</span> <span style="color:var(--text-dim);">${p.next_review_date ? new Date(p.next_review_date).toLocaleDateString() : '—'}</span>
-            <span class="badge badge-${new Date(p.next_review_date) < now ? 'down' : 'warning'}">${new Date(p.next_review_date) < now ? 'Overdue' : 'Due Soon'}</span>
-          </li>`).join('')}
+          ${upcomingReviews.map(p => {
+            const dueDate = new Date(p.next_review_date);
+            const isOverdue = dueDate < now;
+            return `<li style="padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+              <span>${p.name}</span>
+              <span style="color:var(--text-dim); margin-left:1rem;">${dueDate.toLocaleDateString()}</span>
+              <span class="badge badge-${isOverdue ? 'down' : 'warning'}">${isOverdue ? 'Overdue' : 'Due Soon'}</span>
+            </li>`;
+          }).join('')}
         </ul>
       </div>
     ` : ''}
-    <div style="background:var(--glass-bg); backdrop-filter:blur(12px); border-radius:var(--radius-xl); padding:1.5rem;">
+    <div class="glass" style="padding:1.5rem;">
       <h3><i class="fas fa-history"></i> Recent Projects</h3>
       <div style="margin-top:1rem;">
-        ${proj.slice(-5).reverse().map(p => `<div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-          <span>${p.name}</span><span style="color:var(--text-dim);">${p.client_name || '—'}</span>
-        </div>`).join('')}
+        ${proj.slice(-5).reverse().map(p => `
+          <div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+            <span>${p.name}</span>
+            <span style="color:var(--text-dim);">${p.client_name || '—'}</span>
+          </div>
+        `).join('')}
       </div>
     </div>
   `;
 }
 
-// ---------- ADD PROJECT MODAL (with new fields) ----------
+/* ---------- ADD PROJECT MODAL ---------- */
 function openAddProjectModal() {
   showModal(`
     <h3 style="margin-bottom:1rem; color:var(--accent);"><i class="fas fa-plus-circle"></i> Add Project</h3>
@@ -172,7 +198,7 @@ function openAddProjectModal() {
       </div>
       <div style="display:flex; gap:1rem; margin-top:1rem;">
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
-        <button type="button" class="btn btn-danger" onclick="closeModal()"><i class="fas fa-times"></i> Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button>
       </div>
     </form>
   `);
@@ -205,7 +231,7 @@ function openAddProjectModal() {
   });
 }
 
-// ---------- EDIT PROJECT MODAL (with new fields) ----------
+/* ---------- EDIT PROJECT MODAL ---------- */
 function openEditProjectModal(project) {
   showModal(`
     <h3 style="margin-bottom:1rem; color:var(--accent);"><i class="fas fa-edit"></i> Edit Project</h3>
@@ -235,7 +261,7 @@ function openEditProjectModal(project) {
       </div>
       <div style="display:flex; gap:1rem; margin-top:1rem;">
         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update</button>
-        <button type="button" class="btn btn-danger" onclick="closeModal()"><i class="fas fa-times"></i> Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button>
       </div>
     </form>
   `);
@@ -269,7 +295,7 @@ function openEditProjectModal(project) {
   });
 }
 
-// ---------- DELETE CONFIRMATION ----------
+/* ---------- DELETE CONFIRMATION ---------- */
 function confirmDeleteProject(id, name) {
   showModal(`
     <div style="text-align:center;">
@@ -287,7 +313,7 @@ function confirmDeleteProject(id, name) {
   });
 }
 
-// ---------- SALE MODAL / INVOICE ----------
+/* ---------- SALE & INVOICE MODALS ---------- */
 function openSaleModal() {
   fetchJSON(`${API}/projects`).then(projects => {
     showModal(`
@@ -299,9 +325,9 @@ function openSaleModal() {
         <input type="number" id="saleAmount" required />
         <label>Notes</label>
         <input type="text" id="saleNotes" />
-        <div style="margin-top:1rem; display:flex; gap:1rem;">
+        <div style="display:flex; gap:1rem; margin-top:1rem;">
           <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Save</button>
-          <button type="button" class="btn btn-danger" onclick="closeModal()"><i class="fas fa-times"></i> Cancel</button>
+          <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button>
         </div>
       </form>
     `);
@@ -335,17 +361,15 @@ function openInvoiceModal(sale) {
   `);
 }
 
-// ---------- REFRESH & RE-RENDER ----------
+/* ---------- REFRESH AFTER MUTATION ---------- */
 async function refreshAndRender() {
   projectsCache = await fetchJSON(`${API}/projects`).catch(() => []);
-  switch (currentPage) {
-    case 'projects': renderProjects(); break;
-    case 'dashboard': renderDashboard(); break;
-    default: renderApp();
-  }
+  if (currentPage === 'projects') renderProjects();
+  else if (currentPage === 'dashboard') renderDashboard();
+  else renderApp();
 }
 
-// ---------- PROJECTS PAGE (grid/list, thumbnails, tags, public link) ----------
+/* ---------- PROJECTS PAGE ---------- */
 async function renderProjects() {
   if (projectsCache.length === 0) projectsCache = await fetchJSON(`${API}/projects`).catch(() => []);
   const projects = projectsCache;
@@ -368,7 +392,10 @@ async function renderProjects() {
   document.getElementById('searchInput').addEventListener('input', (e) => renderProjectContainer(projectsCache));
 }
 
-function setView(mode) { viewMode = mode; renderProjectContainer(projectsCache); }
+function setView(mode) {
+  viewMode = mode;
+  renderProjectContainer(projectsCache);
+}
 
 function renderProjectContainer(projects) {
   const container = document.getElementById('projectContainer');
@@ -392,14 +419,14 @@ function renderProjectContainer(projects) {
             </div>
             <p style="color:var(--text-dim);">${p.client_name || 'No client'}</p>
             <div style="margin:0.5rem 0;">
-              <span class="badge badge-info" style="margin-right:0.3rem;">${p.status}</span>
+              <span class="badge badge-info" style="margin-right:0.3rem;">${p.status || 'live'}</span>
               ${(p.tags || []).map(t => `<span class="badge badge-unknown" style="margin-right:0.3rem;">${t}</span>`).join('')}
             </div>
             ${p.tech_stack && Object.keys(p.tech_stack).length ? `<div style="font-size:0.8rem; color:var(--text-dim);">${Object.entries(p.tech_stack).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>` : ''}
             <div class="actions" onclick="event.stopPropagation()">
               <button class="btn btn-sm btn-primary" onclick="openEditProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-edit"></i></button>
               <button class="btn btn-sm btn-danger" onclick="confirmDeleteProject(${p.id}, '${p.name.replace(/'/g, "\\'")}')"><i class="fas fa-trash"></i></button>
-              <button class="btn btn-sm btn-success" onclick="copyPublicLink('${p.public_token || ''}')"><i class="fas fa-link"></i></button>
+              ${p.public_token ? `<button class="btn btn-sm btn-success" onclick="copyPublicLink('${p.public_token}')"><i class="fas fa-link"></i></button>` : ''}
             </div>
           </div>
         `).join('')}
@@ -416,9 +443,9 @@ function renderProjectContainer(projects) {
                 <td>${p.thumbnail_url ? `<img src="${p.thumbnail_url}" style="width:50px;height:50px;object-fit:cover;border-radius:8px;" />` : '—'}</td>
                 <td style="cursor:pointer;" onclick="navigate('projectDetail', ${p.id})">${p.name}</td>
                 <td>${p.client_name || '—'}</td>
-                <td><span class="badge badge-${p.liveStatus?.status === 'up' ? 'up' : 'down'}">${p.status}</span></td>
+                <td><span class="badge badge-${p.liveStatus?.status === 'up' ? 'up' : 'down'}">${p.status || 'live'}</span></td>
                 <td>${(p.tags || []).join(', ') || '—'}</td>
-                <td><button class="btn btn-sm btn-success" onclick="copyPublicLink('${p.public_token || ''}')"><i class="fas fa-link"></i></button></td>
+                <td>${p.public_token ? `<button class="btn btn-sm btn-success" onclick="copyPublicLink('${p.public_token}')"><i class="fas fa-link"></i></button>` : '—'}</td>
                 <td>
                   <button class="btn btn-sm btn-primary" onclick="openEditProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-edit"></i></button>
                   <button class="btn btn-sm btn-danger" onclick="confirmDeleteProject(${p.id}, '${p.name.replace(/'/g, "\\'")}')"><i class="fas fa-trash"></i></button>
@@ -438,7 +465,7 @@ function copyPublicLink(token) {
   navigator.clipboard.writeText(link).then(() => alert('Public status link copied!'));
 }
 
-// ---------- PROJECT DETAIL (unchanged) ----------
+/* ---------- PROJECT DETAIL ---------- */
 async function renderProjectDetail(id) {
   const project = await fetchJSON(`${API}/projects/${id}`);
   const history = await fetchJSON(`${API}/uptime/history/${id}?range=24h`).catch(() => []);
@@ -467,12 +494,23 @@ async function renderProjectDetail(id) {
   const ctx = document.getElementById('lineChart').getContext('2d');
   charts.lineChart = new Chart(ctx, {
     type: 'line',
-    data: { labels, datasets: [{ label: 'Response Time (ms)', data, borderColor: '#f4a261', backgroundColor: 'rgba(244,162,97,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+    data: {
+      labels,
+      datasets: [{
+        label: 'Response Time (ms)',
+        data,
+        borderColor: '#f4a261',
+        backgroundColor: 'rgba(244,162,97,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0
+      }]
+    },
     options: { responsive: true }
   });
 }
 
-// ---------- FINANCE PAGE (unchanged) ----------
+/* ---------- FINANCE ---------- */
 async function renderFinance() {
   const [fin, projects] = await Promise.all([
     fetchJSON(`${API}/finance/sales`).catch(() => ({ total: 0, sales: [] })),
@@ -492,14 +530,18 @@ async function renderFinance() {
     <div class="table-container" style="margin-top:2rem;">
       <table>
         <thead><tr><th>Project</th><th>Amount</th><th>Date</th><th>Notes</th><th>Invoice</th><th></th></tr></thead>
-        <tbody>${fin.sales.map(s => `
-          <tr>
-            <td>${s.project_name}</td><td>${formatCurrency(s.amount)}</td><td>${new Date(s.sale_date).toLocaleDateString()}</td>
-            <td>${s.notes || '—'}</td>
-            <td><button class="btn btn-sm btn-primary" onclick="openInvoiceModal(${JSON.stringify(s).replace(/"/g, '&quot;')})"><i class="fas fa-file-invoice"></i></button></td>
-            <td><button class="btn btn-sm btn-danger" onclick="deleteSale(${s.id})"><i class="fas fa-trash"></i></button></td>
-          </tr>
-        `).join('')}</tbody>
+        <tbody>
+          ${fin.sales.map(s => `
+            <tr>
+              <td>${s.project_name}</td>
+              <td>${formatCurrency(s.amount)}</td>
+              <td>${new Date(s.sale_date).toLocaleDateString()}</td>
+              <td>${s.notes || '—'}</td>
+              <td><button class="btn btn-sm btn-primary" onclick="openInvoiceModal(${JSON.stringify(s).replace(/"/g, '&quot;')})"><i class="fas fa-file-invoice"></i></button></td>
+              <td><button class="btn btn-sm btn-danger" onclick="deleteSale(${s.id})"><i class="fas fa-trash"></i></button></td>
+            </tr>
+          `).join('')}
+        </tbody>
       </table>
     </div>
   `;
@@ -517,6 +559,7 @@ async function renderFinance() {
     options: { responsive: true }
   });
 }
+
 async function deleteSale(id) {
   if (confirm('Delete this sale?')) {
     await fetchJSON(`${API}/finance/sales/${id}`, { method: 'DELETE' });
@@ -524,23 +567,28 @@ async function deleteSale(id) {
   }
 }
 
-// ---------- ALERTS PAGE (unchanged) ----------
+/* ---------- ALERTS ---------- */
 async function renderAlerts() {
   const downProjects = await fetchJSON(`${API}/uptime/status`).catch(() => []);
   const down = downProjects.filter(p => p.status === 'down');
   const main = document.querySelector('.main-content');
   main.innerHTML = `<h1><i class="fas fa-exclamation-triangle"></i> Alerts</h1>`;
   if (down.length === 0) {
-    main.innerHTML += `<div class="glass" style="text-align:center; padding:2rem;"><i class="fas fa-check-circle" style="color:var(--success);"></i> All systems operational</div>`;
+    main.innerHTML += `<div class="glass" style="text-align:center;padding:2rem;"><i class="fas fa-check-circle" style="color:var(--success);"></i> All systems operational</div>`;
   } else {
     main.innerHTML += down.map(p => `
       <div class="glass" style="margin-bottom:1rem; border-left:4px solid var(--danger); padding:1rem; display:flex; justify-content:space-between;">
-        <div><strong>Project #${p.project_id}</strong><div style="color:var(--danger);">DOWN</div><small>${new Date(p.checked_at).toLocaleString()}</small></div>
+        <div>
+          <strong>Project #${p.project_id}</strong>
+          <div style="color:var(--danger);">DOWN</div>
+          <small>${new Date(p.checked_at).toLocaleString()}</small>
+        </div>
         <button class="btn btn-sm btn-primary" onclick="resolveAlert(this)"><i class="fas fa-check"></i> Resolve</button>
       </div>
     `).join('');
   }
 }
+
 function resolveAlert(btn) {
   const card = btn.closest('.glass');
   card.style.opacity = '0.5';
@@ -548,7 +596,7 @@ function resolveAlert(btn) {
   btn.innerHTML = '<i class="fas fa-check-circle"></i> Acknowledged';
 }
 
-// ---------- SIDEBAR & LAYOUT (unchanged) ----------
+/* ---------- SIDEBAR ---------- */
 function renderSidebar() {
   return `
     <div class="sidebar">
@@ -566,18 +614,24 @@ function renderSidebar() {
   `;
 }
 
-// ---------- APP INIT ----------
+/* ---------- APP INIT ---------- */
 async function renderApp() {
   const loggedIn = await checkAuth();
-  if (!loggedIn) { renderLogin(); return; }
+  if (!loggedIn) {
+    renderLogin();
+    return;
+  }
+
   document.getElementById('app').innerHTML = `<div class="dashboard-layout">${renderSidebar()}</div>`;
+
   switch (currentPage) {
     case 'dashboard': await renderDashboard(); break;
     case 'projects': await renderProjects(); break;
     case 'projectDetail': {
       const params = new URLSearchParams(window.location.search);
       const id = params.get('id');
-      if (id) await renderProjectDetail(id); else navigate('projects');
+      if (id) await renderProjectDetail(id);
+      else navigate('projects');
       break;
     }
     case 'finance': await renderFinance(); break;
@@ -592,5 +646,5 @@ window.addEventListener('popstate', () => {
   renderApp();
 });
 
-// Start
+// Kick off
 renderApp();
