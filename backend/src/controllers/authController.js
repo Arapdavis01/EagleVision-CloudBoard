@@ -1,24 +1,24 @@
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const pool = require('../config/db');
 const { secret, cookieName, cookieOptions } = require('../config/jwt');
+
+// Temporary admin – no database required
+const TEMP_ADMIN = {
+  email: 'dancun6742@gmail.com',
+  password: '000000',
+  id: 1
+};
 
 exports.login = async (req, res) => {
   const { email, password } = req.body;
-  try {
-    const { rows } = await pool.query('SELECT * FROM admins WHERE email = $1', [email]);
-    if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const valid = await bcrypt.compare(password, rows[0].password_hash);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-
-    const token = jwt.sign({ adminId: rows[0].id }, secret, { expiresIn: '1d' });
+  // Check against hardcoded credentials
+  if (email === TEMP_ADMIN.email && password === TEMP_ADMIN.password) {
+    const token = jwt.sign({ adminId: TEMP_ADMIN.id }, secret, { expiresIn: '1d' });
     res.cookie(cookieName, token, cookieOptions);
     return res.json({ success: true });
-  } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ error: 'Server error' });
   }
+
+  return res.status(401).json({ error: 'Invalid credentials' });
 };
 
 exports.logout = (req, res) => {
