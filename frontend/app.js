@@ -1,4 +1,4 @@
-/* ========== EAGLEVISION PRO APP – Full Featured ========== */
+/* ========== EAGLEVISION PRO APP – COMPLETE ========== */
 const API = 'https://eaglevision-api.onrender.com/api';
 let currentPage = 'dashboard';
 let viewMode = 'grid';
@@ -21,11 +21,14 @@ async function fetchJSON(url, options = {}) {
   return res.json();
 }
 
-/* ---------- MODAL SYSTEM ---------- */
+/* ---------- MODALS ---------- */
 function showModal(html) {
-  document.getElementById('modal-content').innerHTML = html;
+  const modalContent = document.getElementById('modal-content');
+  modalContent.style.backdropFilter = 'none';
+  modalContent.style.webkitBackdropFilter = 'none';
+  modalContent.innerHTML = html;
   document.getElementById('modal-overlay').classList.remove('hidden');
-  document.getElementById('modal-content').classList.remove('hidden');
+  modalContent.classList.remove('hidden');
 }
 function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
@@ -36,17 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ---------- AUTH ---------- */
-async function checkAuth() {
-  try { await fetchJSON(`${API}/auth/check`); return true; } catch { return false; }
-}
-async function login(email, password) {
-  return fetchJSON(`${API}/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) });
-}
-async function logout() {
-  try { await fetchJSON(`${API}/auth/logout`, { method: 'POST' }); } finally { location.reload(); }
-}
+async function checkAuth() { try { await fetchJSON(`${API}/auth/check`); return true; } catch { return false; } }
+async function login(email, password) { return fetchJSON(`${API}/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) }); }
+async function logout() { try { await fetchJSON(`${API}/auth/logout`, { method: 'POST' }); } finally { location.reload(); } }
 
-/* ---------- ROUTING ---------- */
 function navigate(page, param = null) {
   currentPage = page;
   if (param) window.history.pushState(null, '', `?id=${param}`);
@@ -54,50 +50,35 @@ function navigate(page, param = null) {
   renderApp();
 }
 
-/* ---------- CHART CLEANUP ---------- */
 function destroyCharts() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
-
-/* ---------- SIDEBAR TOGGLE ---------- */
 function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('collapsed'); }
 
-/* ---------- LOGIN PAGE ---------- */
+/* ---------- LOGIN ---------- */
 function renderLogin() {
   document.getElementById('app').innerHTML = `
     <div class="login-container" style="display:flex;align-items:center;justify-content:center;height:100vh;">
       <div class="glass" style="padding:2.5rem;width:100%;max-width:400px;">
-        <h2 style="text-align:center;margin-bottom:1.5rem;">
-          <i class="fas fa-binoculars" style="color:var(--accent);"></i> EagleVision
-        </h2>
+        <h2 style="text-align:center;margin-bottom:1.5rem;"><i class="fas fa-binoculars" style="color:var(--accent);"></i> EagleVision</h2>
         <form id="loginForm">
-          <label>Email</label>
-          <input type="email" id="loginEmail" required class="input-modern" />
-          <label>Password</label>
-          <input type="password" id="loginPassword" required class="input-modern" />
+          <label>Email</label><input type="email" id="loginEmail" required class="input-modern" />
+          <label>Password</label><input type="password" id="loginPassword" required class="input-modern" />
           <div id="loginError" style="color:var(--danger);font-size:0.85rem;min-height:1.2em;"></div>
-          <button type="submit" class="btn btn-primary" style="width:100%; margin-top:1rem;" id="loginBtn">
-            <i class="fas fa-sign-in-alt"></i> Sign In
-          </button>
+          <button type="submit" class="btn btn-primary" style="width:100%; margin-top:1rem;"><i class="fas fa-sign-in-alt"></i> Sign In</button>
         </form>
       </div>
     </div>
   `;
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = document.getElementById('loginBtn');
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
     const errorDiv = document.getElementById('loginError');
     if (!email || !password) { errorDiv.textContent = 'Please fill in both fields.'; return; }
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Signing in...';
-    errorDiv.textContent = '';
     try {
       await login(email, password);
       location.reload();
     } catch (err) {
       errorDiv.textContent = 'Invalid credentials.';
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
     }
   });
 }
@@ -159,8 +140,7 @@ async function renderDashboard() {
       <div style="margin-top:1rem;">
         ${proj.slice(-5).reverse().map(p => `
           <div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-            <span>${p.name}</span>
-            <span style="color:var(--text-dim);">${p.client_name || '—'}</span>
+            <span>${p.name}</span><span style="color:var(--text-dim);">${p.client_name || '—'}</span>
           </div>
         `).join('')}
       </div>
@@ -171,7 +151,7 @@ async function renderDashboard() {
 /* ---------- ADD PROJECT MODAL ---------- */
 function openAddProjectModal() {
   showModal(`
-    <h3 style="margin-bottom:1rem; color:var(--accent);"><i class="fas fa-plus-circle"></i> Add Project</h3>
+    <h3 style="color:var(--accent);"><i class="fas fa-plus-circle"></i> Add Project</h3>
     <form id="addProjectForm">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
         <div><label>Name *</label><input type="text" id="pName" required /></div>
@@ -180,33 +160,24 @@ function openAddProjectModal() {
         <div><label>GitHub</label><input type="url" id="pGithub" /></div>
         <div><label>Hosting</label><select id="pHosting"><option value="">Select...</option><option>Render</option><option>Vercel</option><option>Netlify</option><option>AWS</option><option>Other</option></select></div>
         <div><label>Location</label><input type="text" id="pLocation" /></div>
-        <div><label>Thumbnail URL</label><input type="url" id="pThumb" placeholder="https://..." /></div>
-        <div><label>Tech Stack (JSON)</label><input type="text" id="pTech" placeholder='{"frontend":"React","backend":"Node"}' /></div>
-        <div><label>Tags (comma separated)</label><input type="text" id="pTags" placeholder="e.g. web, mobile" /></div>
+        <div><label>Thumbnail URL</label><input type="url" id="pThumb" /></div>
+        <div><label>Tech Stack (JSON)</label><input type="text" id="pTech" placeholder='{"frontend":"React"}' /></div>
+        <div><label>Tags (comma)</label><input type="text" id="pTags" placeholder="web, mobile" /></div>
         <div><label>Last Updated</label><input type="date" id="pLastUpdated" /></div>
-        <div><label>Next Review Date</label><input type="date" id="pNextReview" /></div>
+        <div><label>Next Review</label><input type="date" id="pNextReview" /></div>
         <div><label>Status</label>
           <select id="pStatus">
-            <option value="planning">Planning</option>
-            <option value="development">Development</option>
-            <option value="live" selected>Live</option>
-            <option value="maintenance">Maintenance</option>
+            <option value="planning">Planning</option><option value="development">Development</option>
+            <option value="live" selected>Live</option><option value="maintenance">Maintenance</option>
             <option value="archived">Archived</option>
           </select>
         </div>
-        <div style="grid-column:span 2;"><label>Description</label><textarea id="pDesc" rows="2"></textarea></div>
       </div>
-      <div style="display:flex; gap:1rem; margin-top:1rem;">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
-        <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button>
-      </div>
+      <div style="margin-top:1rem;"><button type="submit" class="btn btn-primary">Save</button> <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button></div>
     </form>
   `);
   document.getElementById('addProjectForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const tags = document.getElementById('pTags').value.split(',').map(t => t.trim()).filter(Boolean);
-    let tech = {};
-    try { tech = JSON.parse(document.getElementById('pTech').value || '{}'); } catch(e) {}
     const payload = {
       name: document.getElementById('pName').value.trim(),
       client_name: document.getElementById('pClient').value.trim(),
@@ -215,12 +186,12 @@ function openAddProjectModal() {
       hosting_platform: document.getElementById('pHosting').value,
       location: document.getElementById('pLocation').value.trim(),
       thumbnail_url: document.getElementById('pThumb').value.trim(),
-      tech_stack: tech,
-      tags,
+      tech_stack: (() => { try { return JSON.parse(document.getElementById('pTech').value || '{}'); } catch { return {}; } })(),
+      tags: document.getElementById('pTags').value.split(',').map(t => t.trim()).filter(Boolean),
       last_updated: document.getElementById('pLastUpdated').value || null,
       next_review_date: document.getElementById('pNextReview').value || null,
       status: document.getElementById('pStatus').value,
-      description: document.getElementById('pDesc').value.trim()
+      description: ''
     };
     if (!payload.name) return;
     try {
@@ -234,7 +205,7 @@ function openAddProjectModal() {
 /* ---------- EDIT PROJECT MODAL ---------- */
 function openEditProjectModal(project) {
   showModal(`
-    <h3 style="margin-bottom:1rem; color:var(--accent);"><i class="fas fa-edit"></i> Edit Project</h3>
+    <h3 style="color:var(--accent);"><i class="fas fa-edit"></i> Edit Project</h3>
     <form id="editProjectForm">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
         <div><label>Name *</label><input type="text" id="eName" value="${project.name}" required /></div>
@@ -245,9 +216,9 @@ function openEditProjectModal(project) {
         <div><label>Location</label><input type="text" id="eLocation" value="${project.location || ''}" /></div>
         <div><label>Thumbnail URL</label><input type="url" id="eThumb" value="${project.thumbnail_url || ''}" /></div>
         <div><label>Tech Stack (JSON)</label><input type="text" id="eTech" value='${JSON.stringify(project.tech_stack || {})}' /></div>
-        <div><label>Tags (comma separated)</label><input type="text" id="eTags" value="${(project.tags || []).join(',')}" /></div>
+        <div><label>Tags (comma)</label><input type="text" id="eTags" value="${(project.tags || []).join(',')}" /></div>
         <div><label>Last Updated</label><input type="date" id="eLastUpdated" value="${project.last_updated || ''}" /></div>
-        <div><label>Next Review Date</label><input type="date" id="eNextReview" value="${project.next_review_date || ''}" /></div>
+        <div><label>Next Review</label><input type="date" id="eNextReview" value="${project.next_review_date || ''}" /></div>
         <div><label>Status</label>
           <select id="eStatus">
             <option value="planning" ${project.status === 'planning' ? 'selected' : ''}>Planning</option>
@@ -257,20 +228,13 @@ function openEditProjectModal(project) {
             <option value="archived" ${project.status === 'archived' ? 'selected' : ''}>Archived</option>
           </select>
         </div>
-        <div style="grid-column:span 2;"><label>Description</label><textarea id="eDesc" rows="2">${project.description || ''}</textarea></div>
       </div>
-      <div style="display:flex; gap:1rem; margin-top:1rem;">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update</button>
-        <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button>
-      </div>
+      <div style="margin-top:1rem;"><button type="submit" class="btn btn-primary">Update</button> <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button></div>
     </form>
   `);
   document.getElementById('eHosting').value = project.hosting_platform || '';
   document.getElementById('editProjectForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const tags = document.getElementById('eTags').value.split(',').map(t => t.trim()).filter(Boolean);
-    let tech = {};
-    try { tech = JSON.parse(document.getElementById('eTech').value || '{}'); } catch(e) {}
     const payload = {
       name: document.getElementById('eName').value.trim(),
       client_name: document.getElementById('eClient').value.trim(),
@@ -279,12 +243,11 @@ function openEditProjectModal(project) {
       hosting_platform: document.getElementById('eHosting').value,
       location: document.getElementById('eLocation').value.trim(),
       thumbnail_url: document.getElementById('eThumb').value.trim(),
-      tech_stack: tech,
-      tags,
+      tech_stack: (() => { try { return JSON.parse(document.getElementById('eTech').value || '{}'); } catch { return {}; } })(),
+      tags: document.getElementById('eTags').value.split(',').map(t => t.trim()).filter(Boolean),
       last_updated: document.getElementById('eLastUpdated').value || null,
       next_review_date: document.getElementById('eNextReview').value || null,
-      status: document.getElementById('eStatus').value,
-      description: document.getElementById('eDesc').value.trim()
+      status: document.getElementById('eStatus').value
     };
     if (!payload.name) return;
     try {
@@ -319,29 +282,21 @@ function openSaleModal() {
     showModal(`
       <h3><i class="fas fa-plus-circle"></i> Record Sale</h3>
       <form id="saleForm">
-        <label>Project</label>
-        <select id="saleProject" required>${projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
-        <label>Amount (KES)</label>
-        <input type="number" id="saleAmount" required />
-        <label>Notes</label>
-        <input type="text" id="saleNotes" />
-        <div style="display:flex; gap:1rem; margin-top:1rem;">
-          <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Save</button>
-          <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button>
-        </div>
+        <label>Project</label><select id="saleProject" required>${projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
+        <label>Amount (KES)</label><input type="number" id="saleAmount" required />
+        <label>Notes</label><input type="text" id="saleNotes" />
+        <div style="margin-top:1rem;"><button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Save</button> <button type="button" class="btn btn-danger" onclick="closeModal()">Cancel</button></div>
       </form>
     `);
     document.getElementById('saleForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const payload = {
+      await fetchJSON(`${API}/finance/sales`, { method: 'POST', body: JSON.stringify({
         project_id: parseInt(document.getElementById('saleProject').value),
         amount: parseFloat(document.getElementById('saleAmount').value),
         notes: document.getElementById('saleNotes').value
-      };
-      await fetchJSON(`${API}/finance/sales`, { method: 'POST', body: JSON.stringify(payload) });
+      })});
       closeModal();
-      if (currentPage === 'finance') await renderFinance();
-      else navigate('finance');
+      if (currentPage === 'finance') renderFinance(); else navigate('finance');
     });
   });
 }
@@ -349,8 +304,7 @@ function openSaleModal() {
 function openInvoiceModal(sale) {
   showModal(`
     <div class="invoice-box" style="max-width:500px; margin:0 auto;">
-      <h2 style="color:var(--primary);">INVOICE</h2>
-      <hr style="margin:1rem 0;" />
+      <h2>INVOICE</h2><hr />
       <p><strong>Project:</strong> ${sale.project_name}</p>
       <p><strong>Amount:</strong> ${formatCurrency(sale.amount)}</p>
       <p><strong>Date:</strong> ${new Date(sale.sale_date).toLocaleDateString()}</p>
@@ -361,7 +315,7 @@ function openInvoiceModal(sale) {
   `);
 }
 
-/* ---------- REFRESH AFTER MUTATION ---------- */
+/* ---------- REFRESH ---------- */
 async function refreshAndRender() {
   projectsCache = await fetchJSON(`${API}/projects`).catch(() => []);
   if (currentPage === 'projects') renderProjects();
@@ -392,10 +346,7 @@ async function renderProjects() {
   document.getElementById('searchInput').addEventListener('input', (e) => renderProjectContainer(projectsCache));
 }
 
-function setView(mode) {
-  viewMode = mode;
-  renderProjectContainer(projectsCache);
-}
+function setView(mode) { viewMode = mode; renderProjectContainer(projectsCache); }
 
 function renderProjectContainer(projects) {
   const container = document.getElementById('projectContainer');
@@ -408,30 +359,28 @@ function renderProjectContainer(projects) {
   );
 
   if (viewMode === 'grid') {
-    container.innerHTML = `
-      <div class="project-grid">
-        ${filtered.map(p => `
-          <div class="project-card" onclick="navigate('projectDetail', ${p.id})">
-            ${p.thumbnail_url ? `<img src="${p.thumbnail_url}" style="width:100%;height:140px;object-fit:cover;border-radius:var(--radius-lg);margin-bottom:0.5rem;" />` : ''}
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <h3>${p.name}</h3>
-              <span class="status-dot" style="background:${p.liveStatus?.status === 'up' ? 'var(--success)' : 'var(--danger)'};"></span>
-            </div>
-            <p style="color:var(--text-dim);">${p.client_name || 'No client'}</p>
-            <div style="margin:0.5rem 0;">
-              <span class="badge badge-info" style="margin-right:0.3rem;">${p.status || 'live'}</span>
-              ${(p.tags || []).map(t => `<span class="badge badge-unknown" style="margin-right:0.3rem;">${t}</span>`).join('')}
-            </div>
-            ${p.tech_stack && Object.keys(p.tech_stack).length ? `<div style="font-size:0.8rem; color:var(--text-dim);">${Object.entries(p.tech_stack).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>` : ''}
-            <div class="actions" onclick="event.stopPropagation()">
-              <button class="btn btn-sm btn-primary" onclick="openEditProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-edit"></i></button>
-              <button class="btn btn-sm btn-danger" onclick="confirmDeleteProject(${p.id}, '${p.name.replace(/'/g, "\\'")}')"><i class="fas fa-trash"></i></button>
-              ${p.public_token ? `<button class="btn btn-sm btn-success" onclick="copyPublicLink('${p.public_token}')"><i class="fas fa-link"></i></button>` : ''}
-            </div>
+    container.innerHTML = `<div class="project-grid">
+      ${filtered.map(p => `
+        <div class="project-card" onclick="navigate('projectDetail', ${p.id})">
+          ${p.thumbnail_url ? `<img src="${p.thumbnail_url}" style="width:100%;height:140px;object-fit:cover;border-radius:var(--radius-lg);margin-bottom:0.5rem;" />` : ''}
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>${p.name}</h3>
+            <span class="status-dot" style="background:${p.liveStatus?.status === 'up' ? 'var(--success)' : 'var(--danger)'};"></span>
           </div>
-        `).join('')}
-      </div>
-    `;
+          <p style="color:var(--text-dim);">${p.client_name || 'No client'}</p>
+          <div style="margin:0.5rem 0;">
+            <span class="badge badge-info">${p.status || 'live'}</span>
+            ${(p.tags || []).map(t => `<span class="badge badge-unknown">${t}</span>`).join('')}
+          </div>
+          ${p.tech_stack && Object.keys(p.tech_stack).length ? `<div style="font-size:0.8rem; color:var(--text-dim);">${Object.entries(p.tech_stack).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>` : ''}
+          <div class="actions" onclick="event.stopPropagation()">
+            <button class="btn btn-sm btn-primary" onclick="openEditProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-sm btn-danger" onclick="confirmDeleteProject(${p.id}, '${p.name.replace(/'/g, "\\'")}')"><i class="fas fa-trash"></i></button>
+            ${p.public_token ? `<button class="btn btn-sm btn-success" onclick="copyPublicLink('${p.public_token}')"><i class="fas fa-link"></i></button>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
   } else {
     container.innerHTML = `
       <div class="table-container">
@@ -523,19 +472,14 @@ async function renderFinance() {
       <div class="stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value">${formatCurrency(fin.total)}</div></div>
     </div>
     <button class="btn btn-primary" onclick="openSaleModal()"><i class="fas fa-plus"></i> Record Sale</button>
-    <div style="margin-top:2rem;">
-      <h3>Monthly Revenue</h3>
-      <canvas id="monthlyChart" height="80"></canvas>
-    </div>
+    <div style="margin-top:2rem;"><h3>Monthly Revenue</h3><canvas id="monthlyChart" height="80"></canvas></div>
     <div class="table-container" style="margin-top:2rem;">
       <table>
         <thead><tr><th>Project</th><th>Amount</th><th>Date</th><th>Notes</th><th>Invoice</th><th></th></tr></thead>
         <tbody>
           ${fin.sales.map(s => `
             <tr>
-              <td>${s.project_name}</td>
-              <td>${formatCurrency(s.amount)}</td>
-              <td>${new Date(s.sale_date).toLocaleDateString()}</td>
+              <td>${s.project_name}</td><td>${formatCurrency(s.amount)}</td><td>${new Date(s.sale_date).toLocaleDateString()}</td>
               <td>${s.notes || '—'}</td>
               <td><button class="btn btn-sm btn-primary" onclick="openInvoiceModal(${JSON.stringify(s).replace(/"/g, '&quot;')})"><i class="fas fa-file-invoice"></i></button></td>
               <td><button class="btn btn-sm btn-danger" onclick="deleteSale(${s.id})"><i class="fas fa-trash"></i></button></td>
@@ -569,31 +513,20 @@ async function deleteSale(id) {
 
 /* ---------- ALERTS ---------- */
 async function renderAlerts() {
-  const downProjects = await fetchJSON(`${API}/uptime/status`).catch(() => []);
-  const down = downProjects.filter(p => p.status === 'down');
+  const down = (await fetchJSON(`${API}/uptime/status`).catch(() => [])).filter(p => p.status === 'down');
   const main = document.querySelector('.main-content');
   main.innerHTML = `<h1><i class="fas fa-exclamation-triangle"></i> Alerts</h1>`;
   if (down.length === 0) {
     main.innerHTML += `<div class="glass" style="text-align:center;padding:2rem;"><i class="fas fa-check-circle" style="color:var(--success);"></i> All systems operational</div>`;
   } else {
-    main.innerHTML += down.map(p => `
-      <div class="glass" style="margin-bottom:1rem; border-left:4px solid var(--danger); padding:1rem; display:flex; justify-content:space-between;">
-        <div>
-          <strong>Project #${p.project_id}</strong>
-          <div style="color:var(--danger);">DOWN</div>
-          <small>${new Date(p.checked_at).toLocaleString()}</small>
-        </div>
-        <button class="btn btn-sm btn-primary" onclick="resolveAlert(this)"><i class="fas fa-check"></i> Resolve</button>
-      </div>
-    `).join('');
+    down.forEach(p => {
+      main.innerHTML += `
+        <div class="glass" style="margin-bottom:1rem; border-left:4px solid var(--danger); padding:1rem; display:flex; justify-content:space-between;">
+          <div><strong>Project #${p.project_id}</strong><div style="color:var(--danger);">DOWN</div><small>${new Date(p.checked_at).toLocaleString()}</small></div>
+          <button class="btn btn-sm btn-primary" onclick="this.parentElement.style.opacity='0.5';this.disabled=true;this.innerHTML='<i class=\\'fas fa-check-circle\\'></i> Acknowledged'"><i class="fas fa-check"></i> Resolve</button>
+        </div>`;
+    });
   }
-}
-
-function resolveAlert(btn) {
-  const card = btn.closest('.glass');
-  card.style.opacity = '0.5';
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-check-circle"></i> Acknowledged';
 }
 
 /* ---------- SIDEBAR ---------- */
@@ -617,10 +550,7 @@ function renderSidebar() {
 /* ---------- APP INIT ---------- */
 async function renderApp() {
   const loggedIn = await checkAuth();
-  if (!loggedIn) {
-    renderLogin();
-    return;
-  }
+  if (!loggedIn) { renderLogin(); return; }
 
   document.getElementById('app').innerHTML = `<div class="dashboard-layout">${renderSidebar()}</div>`;
 
@@ -646,5 +576,4 @@ window.addEventListener('popstate', () => {
   renderApp();
 });
 
-// Kick off
 renderApp();
