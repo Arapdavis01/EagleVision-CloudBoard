@@ -3,8 +3,8 @@ module.exports = {
   cookieName: 'eaglevision_token',
   cookieOptions: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000,
-  },
+    secure: true,               // required for sameSite: 'none'
+    sameSite: 'none',           // allows cross‑site (subdomain) requests
+    maxAge: 24 * 60 * 60 * 1000 // 1 day
+  }
 };
