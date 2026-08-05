@@ -12,7 +12,6 @@ function formatCurrency(amount) {
 }
 
 async function fetchJSON(url, options = {}) {
-  // Always include credentials
   const fetchOptions = {
     ...options,
     credentials: 'include',
@@ -49,7 +48,6 @@ async function logout() {
   try {
     await fetchJSON(`${API}/auth/logout`, { method: 'POST' });
   } finally {
-    // Clear any stale state and reload
     location.reload();
   }
 }
@@ -77,7 +75,7 @@ function renderLogin() {
     <div class="login-container">
       <div class="glass card">
         <h2 style="font-size:1.8rem; text-align:center; margin-bottom:1.5rem; color:var(--primary);">
-          🦅 EagleVision
+          <i class="fas fa-binoculars" style="margin-right:0.5rem;"></i> EagleVision
         </h2>
         <form id="loginForm">
           <label>Email</label>
@@ -86,7 +84,7 @@ function renderLogin() {
           <input type="password" id="loginPassword" required autocomplete="current-password" />
           <div id="loginError" style="color:var(--danger); font-size:0.85rem; min-height:1.2em;"></div>
           <button type="submit" class="btn btn-primary" style="width:100%; margin-top:1rem;" id="loginBtn">
-            Sign In
+            <i class="fas fa-sign-in-alt"></i> Sign In
           </button>
         </form>
       </div>
@@ -106,17 +104,16 @@ function renderLogin() {
     }
 
     btn.disabled = true;
-    btn.textContent = 'Signing in...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Signing in...';
     errorDiv.textContent = '';
 
     try {
       await login(email, password);
-      // Force full reload to ensure cookie is picked up
       location.reload();
     } catch (err) {
-      errorDiv.textContent = 'Invalid email or password. Please try again.';
+      errorDiv.textContent = 'Invalid email or password.';
       btn.disabled = false;
-      btn.textContent = 'Sign In';
+      btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
     }
   });
 }
@@ -137,7 +134,6 @@ async function renderDashboard() {
   const uptimePercent = totalProjects ? ((upCount / totalProjects) * 100).toFixed(1) : 0;
   const critical = totalProjects - upCount;
 
-  // Fake response time data
   const labels = [], values = [];
   const now = new Date();
   for (let i = 23; i >= 0; i--) {
@@ -176,20 +172,67 @@ async function renderDashboard() {
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      scales: {
-        y: { beginAtZero: true }
-      }
+      scales: { y: { beginAtZero: true } }
     }
   });
 }
 
-// ---------- PROJECTS ----------
+// ---------- PROJECTS (with Add button) ----------
 async function renderProjects() {
   const projects = await fetchJSON(`${API}/projects`).catch(() => []);
 
   const main = document.querySelector('.main-content');
   main.innerHTML = `
-    <h1>Projects</h1>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+      <h1>Projects</h1>
+      <button class="btn btn-primary" id="showAddProjectBtn"><i class="fas fa-plus"></i> Add Project</button>
+    </div>
+
+    <div id="addProjectForm" style="display:none; margin:1.5rem 0;" class="glass card">
+      <h3 style="margin-bottom:1rem; color:var(--primary);">New Project</h3>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+        <div>
+          <label>Project Name *</label>
+          <input type="text" id="newProjectName" class="input-modern" required />
+        </div>
+        <div>
+          <label>Client Name</label>
+          <input type="text" id="newClientName" class="input-modern" />
+        </div>
+        <div>
+          <label>Live URL</label>
+          <input type="url" id="newLiveUrl" class="input-modern" placeholder="https://..." />
+        </div>
+        <div>
+          <label>GitHub Repo</label>
+          <input type="url" id="newGithubRepo" class="input-modern" placeholder="https://github.com/..." />
+        </div>
+        <div>
+          <label>Hosting Platform</label>
+          <select id="newHostingPlatform" class="input-modern">
+            <option value="">Select...</option>
+            <option value="Render">Render</option>
+            <option value="Vercel">Vercel</option>
+            <option value="Netlify">Netlify</option>
+            <option value="AWS">AWS</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label>Location</label>
+          <input type="text" id="newLocation" class="input-modern" placeholder="e.g. Nairobi" />
+        </div>
+        <div style="grid-column: span 2;">
+          <label>Description</label>
+          <textarea id="newDescription" class="input-modern" rows="2"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:1rem; display:flex; gap:0.5rem;">
+        <button class="btn btn-success" id="saveProjectBtn"><i class="fas fa-save"></i> Save Project</button>
+        <button class="btn btn-danger btn-sm" id="cancelAddProjectBtn"><i class="fas fa-times"></i> Cancel</button>
+      </div>
+    </div>
+
     <input type="text" id="searchInput" placeholder="Search projects..." style="margin-bottom:1rem; max-width:300px;" class="input-modern" />
     <div class="table-container">
       <table class="table-modern">
@@ -199,11 +242,42 @@ async function renderProjects() {
     </div>
   `;
 
+  // Event listeners
+  document.getElementById('showAddProjectBtn').addEventListener('click', () => {
+    document.getElementById('addProjectForm').style.display = 'block';
+  });
+  document.getElementById('cancelAddProjectBtn').addEventListener('click', () => {
+    document.getElementById('addProjectForm').style.display = 'none';
+  });
+
+  document.getElementById('saveProjectBtn').addEventListener('click', async () => {
+    const name = document.getElementById('newProjectName').value.trim();
+    if (!name) {
+      alert('Project name is required.');
+      return;
+    }
+    const payload = {
+      name,
+      client_name: document.getElementById('newClientName').value.trim(),
+      live_url: document.getElementById('newLiveUrl').value.trim(),
+      github_repo: document.getElementById('newGithubRepo').value.trim(),
+      hosting_platform: document.getElementById('newHostingPlatform').value,
+      location: document.getElementById('newLocation').value.trim(),
+      description: document.getElementById('newDescription').value.trim()
+    };
+    try {
+      await fetchJSON(`${API}/projects`, { method: 'POST', body: JSON.stringify(payload) });
+      document.getElementById('addProjectForm').style.display = 'none';
+      renderProjects(); // refresh list
+    } catch (err) {
+      alert('Failed to create project.');
+    }
+  });
+
   function renderList(filter = '') {
     const term = filter.toLowerCase();
     const filtered = projects.filter(p =>
-      p.name.toLowerCase().includes(term) ||
-      (p.client_name || '').toLowerCase().includes(term)
+      p.name.toLowerCase().includes(term) || (p.client_name || '').toLowerCase().includes(term)
     );
     const tbody = document.getElementById('projectTableBody');
     tbody.innerHTML = filtered.map(p => `
@@ -247,7 +321,7 @@ async function renderProjectDetail(id) {
       <h3>Response Time History</h3>
       <canvas id="lineChart"></canvas>
     </div>
-    <button class="btn btn-primary" onclick="navigate('projects')">← Back to Projects</button>
+    <button class="btn btn-primary" onclick="navigate('projects')"><i class="fas fa-arrow-left"></i> Back to Projects</button>
   `;
 
   const labels = history.map(h => new Date(h.checked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -285,13 +359,13 @@ async function renderFinance() {
       <div class="stat-label">Total Revenue</div>
       <div class="stat-value" style="font-size:2rem;">${formatCurrency(fin.total)}</div>
     </div>
-    <button class="btn btn-primary" id="showFormBtn">+ Record Sale</button>
+    <button class="btn btn-primary" id="showFormBtn"><i class="fas fa-plus"></i> Record Sale</button>
     <div id="saleForm" style="display:none; margin:1rem 0;" class="glass card">
       <select id="saleProject" class="input-modern"><option value="">Select project</option>${projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
       <input type="number" id="saleAmount" placeholder="Amount (KES)" class="input-modern" />
       <input type="text" id="saleNotes" placeholder="Notes" class="input-modern" />
-      <button class="btn btn-success" id="saveSaleBtn">Save</button>
-      <button class="btn btn-danger btn-sm" id="cancelSaleBtn">Cancel</button>
+      <button class="btn btn-success" id="saveSaleBtn"><i class="fas fa-check"></i> Save</button>
+      <button class="btn btn-danger btn-sm" id="cancelSaleBtn"><i class="fas fa-times"></i> Cancel</button>
     </div>
     <div class="table-container">
       <table class="table-modern">
@@ -302,7 +376,7 @@ async function renderFinance() {
             <td>${formatCurrency(s.amount)}</td>
             <td>${new Date(s.sale_date).toLocaleDateString()}</td>
             <td>${s.notes || '—'}</td>
-            <td><button class="btn btn-danger btn-sm delete-sale" data-id="${s.id}">✕</button></td>
+            <td><button class="btn btn-danger btn-sm delete-sale" data-id="${s.id}"><i class="fas fa-trash"></i></button></td>
           </tr>
         `).join('')}</tbody>
       </table>
@@ -343,7 +417,7 @@ async function renderAlerts() {
   const main = document.querySelector('.main-content');
   main.innerHTML = `<h1>Down Projects</h1>`;
   if (down.length === 0) {
-    main.innerHTML += `<div class="glass card" style="text-align:center; padding:2rem;">✅ All systems operational</div>`;
+    main.innerHTML += `<div class="glass card" style="text-align:center; padding:2rem;"><i class="fas fa-check-circle" style="color:var(--success); margin-right:0.5rem;"></i> All systems operational</div>`;
   } else {
     main.innerHTML += down.map(p => `
       <div class="glass card" style="margin-bottom:1rem; border-left:4px solid var(--danger); display:flex; justify-content:space-between;">
@@ -352,7 +426,7 @@ async function renderAlerts() {
           <div style="color:var(--danger);">DOWN</div>
           <small>Last checked: ${new Date(p.checked_at).toLocaleString()}</small>
         </div>
-        <span class="badge badge-down">Offline</span>
+        <span class="badge badge-down"><i class="fas fa-exclamation-triangle"></i> Offline</span>
       </div>
     `).join('');
   }
@@ -362,14 +436,14 @@ async function renderAlerts() {
 function renderSidebar() {
   return `
     <div class="sidebar">
-      <div class="sidebar-logo">🦅 EagleVision</div>
+      <div class="sidebar-logo"><i class="fas fa-binoculars"></i> EagleVision</div>
       <nav>
-        <a class="${currentPage === 'dashboard' ? 'active' : ''}" onclick="navigate('dashboard')">📊 Dashboard</a>
-        <a class="${currentPage === 'projects' ? 'active' : ''}" onclick="navigate('projects')">📁 Projects</a>
-        <a class="${currentPage === 'finance' ? 'active' : ''}" onclick="navigate('finance')">💰 Finance</a>
-        <a class="${currentPage === 'alerts' ? 'active' : ''}" onclick="navigate('alerts')">🚨 Alerts</a>
+        <a class="${currentPage === 'dashboard' ? 'active' : ''}" onclick="navigate('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+        <a class="${currentPage === 'projects' ? 'active' : ''}" onclick="navigate('projects')"><i class="fas fa-folder"></i> Projects</a>
+        <a class="${currentPage === 'finance' ? 'active' : ''}" onclick="navigate('finance')"><i class="fas fa-money-bill-wave"></i> Finance</a>
+        <a class="${currentPage === 'alerts' ? 'active' : ''}" onclick="navigate('alerts')"><i class="fas fa-exclamation-circle"></i> Alerts</a>
       </nav>
-      <button class="btn btn-danger logout-btn" id="logoutBtn">Sign Out</button>
+      <button class="btn btn-danger logout-btn" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
     </div>
     <div class="main-content"></div>
   `;
@@ -386,7 +460,6 @@ async function renderApp() {
   document.getElementById('app').innerHTML = `<div class="dashboard-layout">${renderSidebar()}</div>`;
   document.getElementById('logoutBtn').addEventListener('click', logout);
 
-  // Route
   switch (currentPage) {
     case 'dashboard': await renderDashboard(); break;
     case 'projects': await renderProjects(); break;
@@ -403,7 +476,6 @@ async function renderApp() {
   }
 }
 
-// Handle browser back/forward
 window.addEventListener('popstate', () => {
   const params = new URLSearchParams(window.location.search);
   const id = params.get('id');
@@ -412,5 +484,4 @@ window.addEventListener('popstate', () => {
   renderApp();
 });
 
-// Start
 renderApp();
