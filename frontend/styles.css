@@ -1,4 +1,4 @@
-/* ========== EAGLEVISION PROFESSIONAL THEME ========== */
+/* ========== EAGLEVISION THEME ========== */
 :root {
   --primary: #0d1b2a;
   --primary-light: #1b2a41;
@@ -45,14 +45,21 @@ body::after {
   z-index: 0;
 }
 
+/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
 ::-webkit-scrollbar-thumb { background: rgba(244,162,97,0.4); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(244,162,97,0.6); }
 
-/* ========== LAYOUT ========== */
-.dashboard-layout { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+/* ---------- LAYOUT ---------- */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
 
+/* ----- Sidebar ----- */
 .sidebar {
   width: 250px;
   background: rgba(13,27,42,0.85);
@@ -114,7 +121,7 @@ body::after {
   background: rgba(10,15,24,0.4); backdrop-filter: blur(10px);
 }
 
-/* ========== COMPONENTS ========== */
+/* ---------- COMPONENTS ---------- */
 .glass {
   background: var(--glass-bg); backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border); border-radius: var(--radius-2xl);
@@ -147,34 +154,23 @@ body::after {
 .btn-danger { background: var(--danger); color: white; }
 .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
 
-/* ========== MODAL SYSTEM – 100% blur‑free ========== */
+/* ---------- MODALS (CRYSTAL CLEAR) ---------- */
 .modal-overlay {
-  position: fixed;
-  inset: 0;
+  position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  z-index: 1000; display: flex; align-items: center; justify-content: center;
 }
-
 .modal-container {
-  background: #0d1b2a;                 /* solid colour, NO transparency */
-  filter: none !important;              /* clear any legacy filter */
-  backdrop-filter: none !important;     /* just in case */
+  background: #0d1b2a;                /* solid, NO transparency */
+  filter: none !important;
+  backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border-radius: 1.5rem;
-  padding: 2rem;
-  max-width: 650px;
-  width: 90%;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(244, 162, 97, 0.2);
-  z-index: 1001;
-  animation: slideUp 0.3s ease;
+  border-radius: 1.5rem; padding: 2rem;
+  max-width: 650px; width: 90%; max-height: 85vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  border: 1px solid rgba(244,162,97,0.2);
+  z-index: 1001; animation: slideUp 0.3s ease;
 }
 .hidden { display: none !important; }
 
@@ -183,44 +179,27 @@ body::after {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Modal form elements */
-.modal-container label {
-  display: block;
-  margin-bottom: 0.3rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  font-size: 0.85rem;
-}
+.modal-container label { display: block; margin-bottom: 0.3rem; font-weight: 600; color: var(--text-dim); font-size: 0.85rem; }
 .modal-container input,
 .modal-container select,
 .modal-container textarea {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(244, 162, 97, 0.2);
-  border-radius: 0.75rem;
-  color: #fff;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
-  transition: border 0.2s;
+  width: 100%; padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(244,162,97,0.2); border-radius: 0.75rem;
+  color: #fff; margin-bottom: 1rem; font-size: 0.9rem; transition: border 0.2s;
 }
 .modal-container input:focus,
 .modal-container select:focus,
 .modal-container textarea:focus { outline: none; border-color: #f4a261; }
 
 .input-modern {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  color: white;
-  font-size: 0.9rem;
-  transition: border var(--transition);
+  width: 100%; padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg); color: white; font-size: 0.9rem; transition: border var(--transition);
 }
 .input-modern:focus { outline: none; border-color: var(--accent); }
 
-.view-toggle { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.view-toggle { display: flex; gap: 0.5rem; }
 .view-toggle button {
   background: transparent; border: 1px solid var(--glass-border);
   color: var(--text-dim); padding: 0.4rem 0.8rem; border-radius: var(--radius-lg); cursor: pointer;
