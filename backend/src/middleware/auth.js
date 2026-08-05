@@ -9,6 +9,6 @@ module.exports = (req, res, next) => {
     req.adminId = decoded.adminId;
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: 'Invalid token' });
   }
 };
