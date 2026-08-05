@@ -21,7 +21,7 @@ async function fetchJSON(url, options = {}) {
   return res.json();
 }
 
-/* ---------- MODALS ---------- */
+/* ---------- MODAL SYSTEM ---------- */
 function showModal(html) {
   const modalContent = document.getElementById('modal-content');
   modalContent.style.backdropFilter = 'none';
@@ -30,19 +30,30 @@ function showModal(html) {
   document.getElementById('modal-overlay').classList.remove('hidden');
   modalContent.classList.remove('hidden');
 }
+
 function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   document.getElementById('modal-content').classList.add('hidden');
 }
+
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('modal-overlay').addEventListener('click', closeModal);
 });
 
 /* ---------- AUTH ---------- */
-async function checkAuth() { try { await fetchJSON(`${API}/auth/check`); return true; } catch { return false; } }
-async function login(email, password) { return fetchJSON(`${API}/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) }); }
-async function logout() { try { await fetchJSON(`${API}/auth/logout`, { method: 'POST' }); } finally { location.reload(); } }
+async function checkAuth() {
+  try { await fetchJSON(`${API}/auth/check`); return true; } catch { return false; }
+}
 
+async function login(email, password) {
+  return fetchJSON(`${API}/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) });
+}
+
+async function logout() {
+  try { await fetchJSON(`${API}/auth/logout`, { method: 'POST' }); } finally { location.reload(); }
+}
+
+/* ---------- ROUTING ---------- */
 function navigate(page, param = null) {
   currentPage = page;
   if (param) window.history.pushState(null, '', `?id=${param}`);
@@ -50,10 +61,13 @@ function navigate(page, param = null) {
   renderApp();
 }
 
+/* ---------- CHART CLEANUP ---------- */
 function destroyCharts() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
+
+/* ---------- SIDEBAR TOGGLE ---------- */
 function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('collapsed'); }
 
-/* ---------- LOGIN ---------- */
+/* ---------- LOGIN PAGE ---------- */
 function renderLogin() {
   document.getElementById('app').innerHTML = `
     <div class="login-container" style="display:flex;align-items:center;justify-content:center;height:100vh;">
