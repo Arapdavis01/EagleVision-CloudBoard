@@ -2,7 +2,7 @@ const router = require('express').Router();
 const authController = require('../controllers/authController');
 const auth = require('../middleware/auth');
 
-// Temporarily remove rate limiter to isolate the issue – you can add it back later
+// No rate limiter for now – we'll add it back once everything works
 router.post('/login', authController.login);
 router.post('/logout', auth, authController.logout);
 router.get('/check', auth, authController.check);
