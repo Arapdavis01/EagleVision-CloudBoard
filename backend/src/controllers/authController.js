@@ -7,33 +7,15 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
   try {
     const { rows } = await pool.query('SELECT * FROM admins WHERE email = $1', [email]);
-    if (rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
-
-    const admin = rows[0];
-    const valid = await bcrypt.compare(password, admin.password_hash);
+    if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+    const valid = await bcrypt.compare(password, rows[0].password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-
-    const token = jwt.sign({ adminId: admin.id }, secret, { expiresIn: '1d' });
+    const token = jwt.sign({ adminId: rows[0].id }, secret, { expiresIn: '1d' });
     res.cookie(cookieName, token, cookieOptions);
-
-    // Optional audit logging – don't let it crash the request
-    try {
-      await pool.query(
-        'UPDATE admins SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1 WHERE id = $2',
-        [req.ip, admin.id]
-      );
-      await pool.query(
-        'INSERT INTO admin_audit_logs (admin_id, action, ip_address, user_agent) VALUES ($1,$2,$3,$4)',
-        [admin.id, 'LOGIN', req.ip, req.headers['user-agent']]
-      );
-    } catch (auditErr) {
-      console.error('Audit error:', auditErr);
-    }
-
-    return res.json({ success: true });
+    res.json({ success: true });
   } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error(err);
+    res.status(500).json({ error: 'Login error' });
   }
 };
 
@@ -42,6 +24,4 @@ exports.logout = (req, res) => {
   res.json({ success: true });
 };
 
-exports.check = (req, res) => {
-  res.json({ adminId: req.adminId });
-};
+exports.check = (req, res) => res.json({ adminId: req.adminId });
