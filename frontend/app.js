@@ -1,15 +1,14 @@
-/* ========== EAGLEVISION PROFESSIONAL APP ========== */
+/* ========== EAGLEVISION PRO APP – with Features 1‑8 ========== */
 const API = 'https://eaglevision-api.onrender.com/api';
 let currentPage = 'dashboard';
-let viewMode = 'grid'; // 'grid' or 'list'
+let viewMode = 'grid';
 let charts = {};
-let projectsCache = [];  // keep a local copy for instant UI updates
+let projectsCache = [];
 
 // ---------- HELPERS ----------
 function formatCurrency(amount) {
   return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount || 0);
 }
-
 async function fetchJSON(url, options = {}) {
   const fetchOptions = {
     ...options,
@@ -31,19 +30,12 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   document.getElementById('modal-content').classList.add('hidden');
 }
-// Close modal on overlay click
 document.getElementById('modal-overlay').addEventListener('click', closeModal);
 
 // ---------- AUTH ----------
-async function checkAuth() {
-  try { await fetchJSON(`${API}/auth/check`); return true; } catch { return false; }
-}
-async function login(email, password) {
-  return fetchJSON(`${API}/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) });
-}
-async function logout() {
-  try { await fetchJSON(`${API}/auth/logout`, { method: 'POST' }); } finally { location.reload(); }
-}
+async function checkAuth() { try { await fetchJSON(`${API}/auth/check`); return true; } catch { return false; } }
+async function login(email, password) { return fetchJSON(`${API}/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) }); }
+async function logout() { try { await fetchJSON(`${API}/auth/logout`, { method: 'POST' }); } finally { location.reload(); } }
 
 // ---------- ROUTING ----------
 function navigate(page, param = null) {
@@ -54,17 +46,12 @@ function navigate(page, param = null) {
 }
 
 // ---------- CHART CLEANUP ----------
-function destroyCharts() {
-  Object.values(charts).forEach(c => c.destroy());
-  charts = {};
-}
+function destroyCharts() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
 
 // ---------- SIDEBAR TOGGLE ----------
-function toggleSidebar() {
-  document.querySelector('.sidebar').classList.toggle('collapsed');
-}
+function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('collapsed'); }
 
-// ---------- LOGIN PAGE ----------
+// ---------- LOGIN (unchanged) ----------
 function renderLogin() {
   document.getElementById('app').innerHTML = `
     <div class="login-container" style="display:flex;align-items:center;justify-content:center;height:100vh;">
@@ -104,19 +91,21 @@ function renderLogin() {
   });
 }
 
-// ---------- DASHBOARD ----------
+// ---------- DASHBOARD (with upgrade reminders) ----------
 async function renderDashboard() {
   destroyCharts();
-  const [proj, fin, upt] = await Promise.all([
-    fetchJSON(`${API}/projects`).catch(() => []),
-    fetchJSON(`${API}/finance/sales`).catch(() => ({ total: 0, sales: [] })),
-    fetchJSON(`${API}/uptime/status`).catch(() => [])
-  ]);
-
+  const proj = await fetchJSON(`${API}/projects`).catch(() => []);
+  projectsCache = proj;
+  const fin = await fetchJSON(`${API}/finance/sales`).catch(() => ({ total: 0, sales: [] }));
+  const upt = await fetchJSON(`${API}/uptime/status`).catch(() => []);
   const totalProjects = proj.length;
   const liveProjects = upt.filter(p => p.status === 'up').length;
   const clients = [...new Set(proj.map(p => p.client_name).filter(Boolean))];
   const totalRevenue = fin.total || 0;
+
+  // Upgrade reminders: projects with next_review_date within 30 days or past
+  const now = new Date();
+  const upcomingReviews = proj.filter(p => p.next_review_date && new Date(p.next_review_date) <= new Date(now.getTime() + 30*24*60*60*1000));
 
   const main = document.querySelector('.main-content');
   main.innerHTML = `
@@ -131,8 +120,19 @@ async function renderDashboard() {
       <button class="btn btn-primary" onclick="openAddProjectModal()"><i class="fas fa-plus"></i> Add Project</button>
       <button class="btn btn-success" onclick="openSaleModal()"><i class="fas fa-money-bill-wave"></i> Record Sale</button>
     </div>
+    ${upcomingReviews.length > 0 ? `
+      <div style="background:var(--glass-bg); backdrop-filter:blur(12px); border-radius:var(--radius-xl); padding:1.5rem; margin-bottom:2rem;">
+        <h3><i class="fas fa-clock"></i> Upcoming/Overdue Reviews</h3>
+        <ul style="margin-top:1rem; list-style:none;">
+          ${upcomingReviews.map(p => `<li style="padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+            <span>${p.name}</span> <span style="color:var(--text-dim);">${p.next_review_date ? new Date(p.next_review_date).toLocaleDateString() : '—'}</span>
+            <span class="badge badge-${new Date(p.next_review_date) < now ? 'down' : 'warning'}">${new Date(p.next_review_date) < now ? 'Overdue' : 'Due Soon'}</span>
+          </li>`).join('')}
+        </ul>
+      </div>
+    ` : ''}
     <div style="background:var(--glass-bg); backdrop-filter:blur(12px); border-radius:var(--radius-xl); padding:1.5rem;">
-      <h3><i class="fas fa-clock"></i> Recent Projects</h3>
+      <h3><i class="fas fa-history"></i> Recent Projects</h3>
       <div style="margin-top:1rem;">
         ${proj.slice(-5).reverse().map(p => `<div style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">
           <span>${p.name}</span><span style="color:var(--text-dim);">${p.client_name || '—'}</span>
@@ -142,7 +142,7 @@ async function renderDashboard() {
   `;
 }
 
-// ---------- ADD/EDIT PROJECT MODALS ----------
+// ---------- ADD PROJECT MODAL (with new fields) ----------
 function openAddProjectModal() {
   showModal(`
     <h3 style="margin-bottom:1rem; color:var(--accent);"><i class="fas fa-plus-circle"></i> Add Project</h3>
@@ -154,6 +154,20 @@ function openAddProjectModal() {
         <div><label>GitHub</label><input type="url" id="pGithub" /></div>
         <div><label>Hosting</label><select id="pHosting"><option value="">Select...</option><option>Render</option><option>Vercel</option><option>Netlify</option><option>AWS</option><option>Other</option></select></div>
         <div><label>Location</label><input type="text" id="pLocation" /></div>
+        <div><label>Thumbnail URL</label><input type="url" id="pThumb" placeholder="https://..." /></div>
+        <div><label>Tech Stack (JSON)</label><input type="text" id="pTech" placeholder='{"frontend":"React","backend":"Node"}' /></div>
+        <div><label>Tags (comma separated)</label><input type="text" id="pTags" placeholder="e.g. web, mobile" /></div>
+        <div><label>Last Updated</label><input type="date" id="pLastUpdated" /></div>
+        <div><label>Next Review Date</label><input type="date" id="pNextReview" /></div>
+        <div><label>Status</label>
+          <select id="pStatus">
+            <option value="planning">Planning</option>
+            <option value="development">Development</option>
+            <option value="live" selected>Live</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
         <div style="grid-column:span 2;"><label>Description</label><textarea id="pDesc" rows="2"></textarea></div>
       </div>
       <div style="display:flex; gap:1rem; margin-top:1rem;">
@@ -164,6 +178,9 @@ function openAddProjectModal() {
   `);
   document.getElementById('addProjectForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const tags = document.getElementById('pTags').value.split(',').map(t => t.trim()).filter(Boolean);
+    let tech = {};
+    try { tech = JSON.parse(document.getElementById('pTech').value || '{}'); } catch(e) {}
     const payload = {
       name: document.getElementById('pName').value.trim(),
       client_name: document.getElementById('pClient').value.trim(),
@@ -171,6 +188,12 @@ function openAddProjectModal() {
       github_repo: document.getElementById('pGithub').value.trim(),
       hosting_platform: document.getElementById('pHosting').value,
       location: document.getElementById('pLocation').value.trim(),
+      thumbnail_url: document.getElementById('pThumb').value.trim(),
+      tech_stack: tech,
+      tags,
+      last_updated: document.getElementById('pLastUpdated').value || null,
+      next_review_date: document.getElementById('pNextReview').value || null,
+      status: document.getElementById('pStatus').value,
       description: document.getElementById('pDesc').value.trim()
     };
     if (!payload.name) return;
@@ -182,6 +205,7 @@ function openAddProjectModal() {
   });
 }
 
+// ---------- EDIT PROJECT MODAL (with new fields) ----------
 function openEditProjectModal(project) {
   showModal(`
     <h3 style="margin-bottom:1rem; color:var(--accent);"><i class="fas fa-edit"></i> Edit Project</h3>
@@ -193,6 +217,20 @@ function openEditProjectModal(project) {
         <div><label>GitHub</label><input type="url" id="eGithub" value="${project.github_repo || ''}" /></div>
         <div><label>Hosting</label><select id="eHosting"><option value="">Select...</option><option>Render</option><option>Vercel</option><option>Netlify</option><option>AWS</option><option>Other</option></select></div>
         <div><label>Location</label><input type="text" id="eLocation" value="${project.location || ''}" /></div>
+        <div><label>Thumbnail URL</label><input type="url" id="eThumb" value="${project.thumbnail_url || ''}" /></div>
+        <div><label>Tech Stack (JSON)</label><input type="text" id="eTech" value='${JSON.stringify(project.tech_stack || {})}' /></div>
+        <div><label>Tags (comma separated)</label><input type="text" id="eTags" value="${(project.tags || []).join(',')}" /></div>
+        <div><label>Last Updated</label><input type="date" id="eLastUpdated" value="${project.last_updated || ''}" /></div>
+        <div><label>Next Review Date</label><input type="date" id="eNextReview" value="${project.next_review_date || ''}" /></div>
+        <div><label>Status</label>
+          <select id="eStatus">
+            <option value="planning" ${project.status === 'planning' ? 'selected' : ''}>Planning</option>
+            <option value="development" ${project.status === 'development' ? 'selected' : ''}>Development</option>
+            <option value="live" ${project.status === 'live' ? 'selected' : ''}>Live</option>
+            <option value="maintenance" ${project.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+            <option value="archived" ${project.status === 'archived' ? 'selected' : ''}>Archived</option>
+          </select>
+        </div>
         <div style="grid-column:span 2;"><label>Description</label><textarea id="eDesc" rows="2">${project.description || ''}</textarea></div>
       </div>
       <div style="display:flex; gap:1rem; margin-top:1rem;">
@@ -204,6 +242,9 @@ function openEditProjectModal(project) {
   document.getElementById('eHosting').value = project.hosting_platform || '';
   document.getElementById('editProjectForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const tags = document.getElementById('eTags').value.split(',').map(t => t.trim()).filter(Boolean);
+    let tech = {};
+    try { tech = JSON.parse(document.getElementById('eTech').value || '{}'); } catch(e) {}
     const payload = {
       name: document.getElementById('eName').value.trim(),
       client_name: document.getElementById('eClient').value.trim(),
@@ -211,6 +252,12 @@ function openEditProjectModal(project) {
       github_repo: document.getElementById('eGithub').value.trim(),
       hosting_platform: document.getElementById('eHosting').value,
       location: document.getElementById('eLocation').value.trim(),
+      thumbnail_url: document.getElementById('eThumb').value.trim(),
+      tech_stack: tech,
+      tags,
+      last_updated: document.getElementById('eLastUpdated').value || null,
+      next_review_date: document.getElementById('eNextReview').value || null,
+      status: document.getElementById('eStatus').value,
       description: document.getElementById('eDesc').value.trim()
     };
     if (!payload.name) return;
@@ -222,6 +269,7 @@ function openEditProjectModal(project) {
   });
 }
 
+// ---------- DELETE CONFIRMATION ----------
 function confirmDeleteProject(id, name) {
   showModal(`
     <div style="text-align:center;">
@@ -287,9 +335,8 @@ function openInvoiceModal(sale) {
   `);
 }
 
-// ---------- REFRESH DATA & RE-RENDER ----------
+// ---------- REFRESH & RE-RENDER ----------
 async function refreshAndRender() {
-  // refresh projects cache
   projectsCache = await fetchJSON(`${API}/projects`).catch(() => []);
   switch (currentPage) {
     case 'projects': renderProjects(); break;
@@ -298,11 +345,10 @@ async function refreshAndRender() {
   }
 }
 
-// ---------- PROJECTS PAGE ----------
+// ---------- PROJECTS PAGE (grid/list, thumbnails, tags, public link) ----------
 async function renderProjects() {
   if (projectsCache.length === 0) projectsCache = await fetchJSON(`${API}/projects`).catch(() => []);
   const projects = projectsCache;
-
   const main = document.querySelector('.main-content');
   main.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
@@ -315,38 +361,45 @@ async function renderProjects() {
         <button class="btn btn-primary" onclick="openAddProjectModal()"><i class="fas fa-plus"></i> Add</button>
       </div>
     </div>
+    <input type="text" id="searchInput" placeholder="Search projects or tags..." class="input-modern" style="margin-bottom:1rem; width:300px;" />
     <div id="projectContainer"></div>
   `;
-
   renderProjectContainer(projects);
-  // search listener if added
+  document.getElementById('searchInput').addEventListener('input', (e) => renderProjectContainer(projectsCache));
 }
 
-function setView(mode) {
-  viewMode = mode;
-  renderProjectContainer(projectsCache);
-}
+function setView(mode) { viewMode = mode; renderProjectContainer(projectsCache); }
 
 function renderProjectContainer(projects) {
   const container = document.getElementById('projectContainer');
   if (!container) return;
-
   const filter = document.getElementById('searchInput')?.value?.toLowerCase() || '';
-  const filtered = projects.filter(p => p.name.toLowerCase().includes(filter) || (p.client_name || '').toLowerCase().includes(filter));
+  const filtered = projects.filter(p =>
+    p.name.toLowerCase().includes(filter) ||
+    (p.client_name || '').toLowerCase().includes(filter) ||
+    (p.tags || []).some(t => t.toLowerCase().includes(filter))
+  );
 
   if (viewMode === 'grid') {
     container.innerHTML = `
       <div class="project-grid">
         ${filtered.map(p => `
           <div class="project-card" onclick="navigate('projectDetail', ${p.id})">
+            ${p.thumbnail_url ? `<img src="${p.thumbnail_url}" style="width:100%;height:140px;object-fit:cover;border-radius:var(--radius-lg);margin-bottom:0.5rem;" />` : ''}
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <h3>${p.name}</h3>
               <span class="status-dot" style="background:${p.liveStatus?.status === 'up' ? 'var(--success)' : 'var(--danger)'};"></span>
             </div>
             <p style="color:var(--text-dim);">${p.client_name || 'No client'}</p>
+            <div style="margin:0.5rem 0;">
+              <span class="badge badge-info" style="margin-right:0.3rem;">${p.status}</span>
+              ${(p.tags || []).map(t => `<span class="badge badge-unknown" style="margin-right:0.3rem;">${t}</span>`).join('')}
+            </div>
+            ${p.tech_stack && Object.keys(p.tech_stack).length ? `<div style="font-size:0.8rem; color:var(--text-dim);">${Object.entries(p.tech_stack).map(([k,v]) => `${k}: ${v}`).join(', ')}</div>` : ''}
             <div class="actions" onclick="event.stopPropagation()">
               <button class="btn btn-sm btn-primary" onclick="openEditProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-edit"></i></button>
               <button class="btn btn-sm btn-danger" onclick="confirmDeleteProject(${p.id}, '${p.name.replace(/'/g, "\\'")}')"><i class="fas fa-trash"></i></button>
+              <button class="btn btn-sm btn-success" onclick="copyPublicLink('${p.public_token || ''}')"><i class="fas fa-link"></i></button>
             </div>
           </div>
         `).join('')}
@@ -356,13 +409,16 @@ function renderProjectContainer(projects) {
     container.innerHTML = `
       <div class="table-container">
         <table>
-          <thead><tr><th>Name</th><th>Client</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Thumb</th><th>Name</th><th>Client</th><th>Status</th><th>Tags</th><th>Public</th><th>Actions</th></tr></thead>
           <tbody>
             ${filtered.map(p => `
               <tr>
+                <td>${p.thumbnail_url ? `<img src="${p.thumbnail_url}" style="width:50px;height:50px;object-fit:cover;border-radius:8px;" />` : '—'}</td>
                 <td style="cursor:pointer;" onclick="navigate('projectDetail', ${p.id})">${p.name}</td>
                 <td>${p.client_name || '—'}</td>
-                <td><span class="badge badge-${p.liveStatus?.status === 'up' ? 'up' : 'down'}">${p.liveStatus?.status || 'unknown'}</span></td>
+                <td><span class="badge badge-${p.liveStatus?.status === 'up' ? 'up' : 'down'}">${p.status}</span></td>
+                <td>${(p.tags || []).join(', ') || '—'}</td>
+                <td><button class="btn btn-sm btn-success" onclick="copyPublicLink('${p.public_token || ''}')"><i class="fas fa-link"></i></button></td>
                 <td>
                   <button class="btn btn-sm btn-primary" onclick="openEditProjectModal(${JSON.stringify(p).replace(/"/g, '&quot;')})"><i class="fas fa-edit"></i></button>
                   <button class="btn btn-sm btn-danger" onclick="confirmDeleteProject(${p.id}, '${p.name.replace(/'/g, "\\'")}')"><i class="fas fa-trash"></i></button>
@@ -374,15 +430,15 @@ function renderProjectContainer(projects) {
       </div>
     `;
   }
-  // Re-attach search input if not exists
-  if (!document.getElementById('searchInput')) {
-    const searchHtml = '<input type="text" id="searchInput" placeholder="Search projects..." class="input-modern" style="margin-bottom:1rem; width:300px;" />';
-    container.insertAdjacentHTML('beforebegin', searchHtml);
-    document.getElementById('searchInput').addEventListener('input', (e) => renderProjectContainer(projectsCache));
-  }
 }
 
-// ---------- PROJECT DETAIL PAGE ----------
+function copyPublicLink(token) {
+  if (!token) { alert('No public token available.'); return; }
+  const link = `https://eaglevision-api.onrender.com/api/projects/public/${token}`;
+  navigator.clipboard.writeText(link).then(() => alert('Public status link copied!'));
+}
+
+// ---------- PROJECT DETAIL (unchanged) ----------
 async function renderProjectDetail(id) {
   const project = await fetchJSON(`${API}/projects/${id}`);
   const history = await fetchJSON(`${API}/uptime/history/${id}?range=24h`).catch(() => []);
@@ -416,7 +472,7 @@ async function renderProjectDetail(id) {
   });
 }
 
-// ---------- FINANCE PAGE ----------
+// ---------- FINANCE PAGE (unchanged) ----------
 async function renderFinance() {
   const [fin, projects] = await Promise.all([
     fetchJSON(`${API}/finance/sales`).catch(() => ({ total: 0, sales: [] })),
@@ -447,8 +503,6 @@ async function renderFinance() {
       </table>
     </div>
   `;
-
-  // monthly revenue chart (fake data based on sales)
   const monthly = {};
   fin.sales.forEach(s => {
     const month = new Date(s.sale_date).toLocaleString('en', { month: 'short' });
@@ -463,7 +517,6 @@ async function renderFinance() {
     options: { responsive: true }
   });
 }
-
 async function deleteSale(id) {
   if (confirm('Delete this sale?')) {
     await fetchJSON(`${API}/finance/sales/${id}`, { method: 'DELETE' });
@@ -471,7 +524,7 @@ async function deleteSale(id) {
   }
 }
 
-// ---------- ALERTS PAGE ----------
+// ---------- ALERTS PAGE (unchanged) ----------
 async function renderAlerts() {
   const downProjects = await fetchJSON(`${API}/uptime/status`).catch(() => []);
   const down = downProjects.filter(p => p.status === 'down');
@@ -488,7 +541,6 @@ async function renderAlerts() {
     `).join('');
   }
 }
-// temporary resolve function (UI only)
 function resolveAlert(btn) {
   const card = btn.closest('.glass');
   card.style.opacity = '0.5';
@@ -496,7 +548,7 @@ function resolveAlert(btn) {
   btn.innerHTML = '<i class="fas fa-check-circle"></i> Acknowledged';
 }
 
-// ---------- SIDEBAR & LAYOUT ----------
+// ---------- SIDEBAR & LAYOUT (unchanged) ----------
 function renderSidebar() {
   return `
     <div class="sidebar">
@@ -518,9 +570,7 @@ function renderSidebar() {
 async function renderApp() {
   const loggedIn = await checkAuth();
   if (!loggedIn) { renderLogin(); return; }
-
   document.getElementById('app').innerHTML = `<div class="dashboard-layout">${renderSidebar()}</div>`;
-
   switch (currentPage) {
     case 'dashboard': await renderDashboard(); break;
     case 'projects': await renderProjects(); break;
