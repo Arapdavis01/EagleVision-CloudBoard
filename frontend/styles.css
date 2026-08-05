@@ -368,4 +368,32 @@ td {
   .sidebar { width: 100%; height: auto; }
   .sidebar.collapsed { width: 100%; }
   .main-content { padding: 1rem; }
+}  
+/* Project status pipeline colors */
+.status-planning { border-left: 4px solid #f4a261; }
+.status-development { border-left: 4px solid #2a9d8f; }
+.status-live { border-left: 4px solid #10b981; }
+.status-maintenance { border-left: 4px solid #e9c46a; }
+.status-archived { border-left: 4px solid #6c757d; }
+
+/* Tags / badges */
+.badge-warning { background: #f4a26120; color: #f4a261; }
+.badge-info { background: #2a9d8f20; color: #2a9d8f; }
+
+/* Thumbnail styling */
+.project-card img {
+  transition: transform 0.3s ease;
+}
+.project-card:hover img {
+  transform: scale(1.05);
+}
+
+/* Public link button */
+.copy-link-btn {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
 }
