@@ -397,3 +397,69 @@ td {
   border-radius: var(--radius-lg);
   cursor: pointer;
 }
+/* ========== MODAL SYSTEM ========== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-container {
+  background: rgba(13, 27, 42, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  max-width: 650px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(244, 162, 97, 0.2);
+  z-index: 1001;
+  animation: slideUp 0.3s ease;
+}
+
+/* Hide when not needed */
+.hidden {
+  display: none !important;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ensure modal form inputs look consistent */
+.modal-container input,
+.modal-container select,
+.modal-container textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(244, 162, 97, 0.2);
+  border-radius: 0.75rem;
+  color: #fff;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  transition: border 0.2s;
+}
+
+.modal-container input:focus,
+.modal-container select:focus,
+.modal-container textarea:focus {
+  outline: none;
+  border-color: #f4a261;
+}
