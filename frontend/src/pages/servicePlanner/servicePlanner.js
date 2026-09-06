@@ -382,4 +382,71 @@ export async function servicePlannerPage() {
       try {
         await servicePlanService.reopenPlan(planId);
         showToast('Plan reopened', 'success');
-       
+        loadPlans();
+      } catch (err) {
+        showToast(err.message || 'Failed to reopen plan', 'error');
+      }
+    }
+
+    // Edit plan
+    if (btn.classList.contains('edit-plan-btn')) {
+      const plan = allPlans.find(p => p.id == planId);
+      if (!plan) return;
+
+      const { close } = showModal(renderPlanForm(allProjects, plan));
+      const form = document.getElementById('plan-form');
+      if (!form) return;
+
+      document.querySelector('.cancel-plan-btn')?.addEventListener('click', () => close());
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        try {
+          await servicePlanService.updatePlan(planId, data);
+          close();
+          showToast('Service plan updated', 'success');
+          loadPlans();
+        } catch (err) {
+          showToast(err.message || 'Failed to update plan', 'error');
+        }
+      });
+    }
+
+    // Delete plan
+    if (btn.classList.contains('delete-plan-btn')) {
+      const confirmed = await confirmDialog(
+        'Delete this service plan?',
+        'Confirm Deletion'
+      );
+      if (!confirmed) return;
+      
+      try {
+        await servicePlanService.deletePlan(planId);
+        showToast('Service plan deleted', 'success');
+        loadPlans();
+      } catch (err) {
+        showToast(err.message || 'Failed to delete plan', 'error');
+      }
+    }
+  });
+
+  // Initialize
+  await loadProjects();
+  await loadPlans();
+}
+
+// Debounce utility
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
