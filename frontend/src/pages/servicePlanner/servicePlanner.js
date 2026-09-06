@@ -161,10 +161,17 @@ export async function servicePlannerPage() {
   async function loadStats() {
     try {
       const stats = await servicePlanService.getStats();
-      document.getElementById('stat-total').textContent = stats.total_plans || 0;
-      document.getElementById('stat-progress').textContent = stats.in_progress || 0;
-      document.getElementById('stat-high').textContent = stats.high_priority || 0;
-      document.getElementById('stat-overdue').textContent = stats.overdue || 0;
+      
+      // Safely set text content with null checks
+      const statTotal = document.getElementById('stat-total');
+      const statProgress = document.getElementById('stat-progress');
+      const statHigh = document.getElementById('stat-high');
+      const statOverdue = document.getElementById('stat-overdue');
+      
+      if (statTotal) statTotal.textContent = stats.total_plans || 0;
+      if (statProgress) statProgress.textContent = stats.in_progress || 0;
+      if (statHigh) statHigh.textContent = stats.high_priority || 0;
+      if (statOverdue) statOverdue.textContent = stats.overdue || 0;
     } catch (err) {
       console.error('Failed to load stats:', err);
     }
@@ -205,7 +212,7 @@ export async function servicePlannerPage() {
       plansContainer.innerHTML = `
         <div class="empty-state">
           <i class="fas fa-clipboard-list fa-3x"></i>
-          <p>No service plans found.</p>
+          <p>No service plans found. Click "New Plan" to create one.</p>
         </div>
       `;
       return;
@@ -241,14 +248,19 @@ export async function servicePlannerPage() {
                 </button>
               ` : ''}
               ${plan.status === 'in_progress' && plan.update_id ? `
-                <button class="btn btn-sm btn-outline view-sr-btn" data-update-id="${plan.update_id}">
+                <button class="btn btn-sm btn-outline view-sr-btn" data-id="${plan.id}" data-update-id="${plan.update_id}">
                   <i class="fas fa-link"></i> View SR
                 </button>
                 <button class="btn btn-sm btn-success complete-plan-btn" data-id="${plan.id}">
-                  <i class="fas fa-check-circle"></i> Mark Complete
+                  <i class="fas fa-check-circle"></i> Complete
                 </button>
               ` : ''}
               ${plan.status === 'completed' ? `
+                <button class="btn btn-sm btn-outline reopen-plan-btn" data-id="${plan.id}">
+                  <i class="fas fa-undo"></i> Reopen
+                </button>
+              ` : ''}
+              ${plan.status === 'cancelled' ? `
                 <button class="btn btn-sm btn-outline reopen-plan-btn" data-id="${plan.id}">
                   <i class="fas fa-undo"></i> Reopen
                 </button>
@@ -290,7 +302,7 @@ export async function servicePlannerPage() {
     });
   });
 
-  // Search
+  // Search with debounce
   searchInput.addEventListener('input', debounce(() => {
     searchTerm = searchInput.value;
     loadPlans();
@@ -346,8 +358,6 @@ export async function servicePlannerPage() {
 
     // View Service Record
     if (btn.classList.contains('view-sr-btn')) {
-      const updateId = btn.dataset.updateId;
-      // Navigate to service record page
       const plan = allPlans.find(p => p.id == planId);
       if (plan) {
         location.hash = `#service-record?project_id=${plan.project_id}`;
