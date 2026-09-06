@@ -244,6 +244,27 @@ export async function serviceRecordPage() {
     }
   }
 
+  function renderPlanBadge(u) {
+    if (!u.plan_id) return '';
+    
+    const statusColors = {
+      planned: '#e0f2fe',
+      in_progress: '#dbeafe',
+      completed: '#dcfce7',
+      cancelled: '#f3f4f6'
+    };
+    
+    const bgColor = statusColors[u.plan_status] || '#f3f4f6';
+    
+    return `
+      <a href="#service-planner" class="plan-badge-link" title="View in Service Planner">
+        <span class="plan-badge" style="background: ${bgColor};">
+          <i class="fas fa-clipboard-list"></i> Plan #${u.plan_id}
+        </span>
+      </a>
+    `;
+  }
+
   function renderTable(items) {
     updatesContainer.innerHTML = `
       <div class="table-container card">
@@ -264,7 +285,10 @@ export async function serviceRecordPage() {
               return `
                 <tr data-id="${u.id}">
                   <td><span class="update-type-badge ${colorClass}"><i class="fas ${icon}"></i> ${escapeHtml(u.update_type)}</span></td>
-                  <td><strong>${escapeHtml(u.title)}</strong></td>
+                  <td>
+                    <strong>${escapeHtml(u.title)}</strong>
+                    ${renderPlanBadge(u)}
+                  </td>
                   <td>${escapeHtml(u.description || '—')}</td>
                   <td>${u.cost ? '$' + parseFloat(u.cost).toLocaleString() : '—'}</td>
                   <td>${new Date(u.created_at).toLocaleDateString()}</td>
@@ -296,6 +320,7 @@ export async function serviceRecordPage() {
                   <strong>${escapeHtml(u.title)}</strong>
                   <span class="update-type-badge ${colorClass}"><i class="fas ${icon}"></i> ${escapeHtml(u.update_type)}</span>
                 </div>
+                ${renderPlanBadge(u)}
                 <p>${escapeHtml(u.description || 'No description')}</p>
                 <div class="timeline-meta">
                   <span><i class="fas fa-calendar-alt"></i> ${new Date(u.created_at).toLocaleString()}</span>
@@ -399,7 +424,7 @@ export async function serviceRecordPage() {
           <h1>Service Record</h1>
           <p><strong>Project:</strong> ${escapeHtml(project?.name || '')}</p>
           <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%;">
-            <tr><th>Type</th><th>Title</th><th>Description</th><th>Cost</th><th>Date</th></tr>
+            <tr><th>Type</th><th>Title</th><th>Description</th><th>Cost</th><th>Date</th><th>Plan</th></tr>
             ${filtered.map(u => `
               <tr>
                 <td>${escapeHtml(u.update_type)}</td>
@@ -407,6 +432,7 @@ export async function serviceRecordPage() {
                 <td>${escapeHtml(u.description || '')}</td>
                 <td>${u.cost ? '$' + parseFloat(u.cost).toLocaleString() : '—'}</td>
                 <td>${new Date(u.created_at).toLocaleDateString()}</td>
+                <td>${u.plan_id ? `Plan #${u.plan_id}` : '—'}</td>
               </tr>
             `).join('')}
           </table>
