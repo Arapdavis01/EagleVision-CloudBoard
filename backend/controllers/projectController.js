@@ -100,12 +100,20 @@ exports.getPublicStatus = async (req, res) => {
 
 // ==================== PROJECT UPDATES (SERVICE RECORD) ====================
 
-// Get all updates for a specific project
+// Get all updates for a specific project (with plan info if linked)
 exports.getProjectUpdates = async (req, res) => {
   const { projectId } = req.params;
   try {
     const { rows } = await pool.query(
-      `SELECT * FROM project_updates WHERE project_id = $1 ORDER BY created_at DESC`,
+      `SELECT pu.*, 
+              sp.id as plan_id, 
+              sp.title as plan_title, 
+              sp.status as plan_status,
+              sp.priority as plan_priority
+       FROM project_updates pu
+       LEFT JOIN service_plans sp ON sp.update_id = pu.id
+       WHERE pu.project_id = $1
+       ORDER BY pu.created_at DESC`,
       [projectId]
     );
     res.json(rows);
@@ -167,6 +175,10 @@ exports.updateProjectUpdate = async (req, res) => {
 exports.deleteProjectUpdate = async (req, res) => {
   const { id } = req.params;
   try {
+    // First, unlink any service plans that reference this update
+    await pool.query('UPDATE service_plans SET update_id = NULL WHERE update_id = $1', [id]);
+    
+    // Then delete the update
     const { rowCount } = await pool.query('DELETE FROM project_updates WHERE id = $1', [id]);
     if (rowCount === 0) return res.status(404).json({ error: 'Update not found' });
     res.json({ message: 'Update deleted' });
