@@ -2986,3 +2986,33 @@ body.app-dashboard .chart-review-row .compact-chart canvas {
     grid-template-columns: 1fr;
   }
 }
+/* ================================================================
+   SERVICE RECORD – PLAN BADGE
+   ================================================================ */
+.plan-badge-link {
+  text-decoration: none;
+  display: inline-block;
+  margin-top: 0.3rem;
+}
+
+.plan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #1a472a;
+  transition: opacity 0.2s;
+}
+
+.plan-badge:hover {
+  opacity: 0.8;
+}
+
+.plan-badge i {
+  font-size: 0.7rem;
+}
