@@ -7,6 +7,7 @@ export function renderSidebar() {
       <a href="#dashboard" class="nav-link" data-page="dashboard"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
       <a href="#projects" class="nav-link" data-page="projects"><i class="fas fa-folder-open"></i> Projects</a>
       <a href="#showcase" class="nav-link" data-page="showcase"><i class="fas fa-images"></i> Project Showcase</a>
+      <a href="#service-planner" class="nav-link" data-page="service-planner"><i class="fas fa-clipboard-list"></i> Service Planner</a>
       <a href="#service-record" class="nav-link" data-page="service-record"><i class="fas fa-history"></i> Service Record</a>
 
       <!-- Finance Dropdown -->
