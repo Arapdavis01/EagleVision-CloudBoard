@@ -8,23 +8,34 @@ export function renderPlanForm(projects, plan = {}) {
   defaultTarget.setDate(defaultTarget.getDate() + 30);
   const defaultDateStr = defaultTarget.toISOString().slice(0, 10);
 
+  const isEdit = !!plan.id;
+
   return `
     <div class="plan-form-container">
       <div class="plan-form-header">
         <div class="plan-form-icon">
-          <i class="fas fa-clipboard-list"></i>
+          <i class="fas fa-${isEdit ? 'edit' : 'clipboard-list'}"></i>
         </div>
         <div class="plan-form-title">
-          <h2>${plan.id ? 'Edit Service Plan' : 'Create New Service Plan'}</h2>
-          <p>${plan.id ? 'Update the details of your service plan' : 'Plan a new improvement for your project'}</p>
+          <h2>${isEdit ? 'Edit Service Plan' : 'Create New Service Plan'}</h2>
+          <p>${isEdit ? 'Update the details of your service plan' : 'Plan a new improvement for your project'}</p>
         </div>
       </div>
+
+      ${!isEdit ? `
+        <!-- Template Selector (only on create) -->
+        <div id="plan-templates-container" class="plan-templates-container"></div>
+      ` : ''}
 
       <form id="plan-form" class="plan-form">
         <input type="hidden" name="id" value="${plan.id || ''}">
 
+        <!-- SECTION 1: Project & Title -->
         <div class="plan-form-section">
-          <h3 class="section-title"><i class="fas fa-folder-open"></i> Project Details</h3>
+          <h3 class="section-title">
+            <span class="section-icon"><i class="fas fa-folder-open"></i></span>
+            Project Details
+          </h3>
           
           <div class="form-field">
             <label for="plan-project">
@@ -47,8 +58,12 @@ export function renderPlanForm(projects, plan = {}) {
           </div>
         </div>
 
+        <!-- SECTION 2: Classification -->
         <div class="plan-form-section">
-          <h3 class="section-title"><i class="fas fa-tasks"></i> Classification</h3>
+          <h3 class="section-title">
+            <span class="section-icon"><i class="fas fa-tasks"></i></span>
+            Classification
+          </h3>
           
           <div class="form-row-2">
             <div class="form-field">
@@ -68,7 +83,7 @@ export function renderPlanForm(projects, plan = {}) {
               </label>
               <select id="plan-priority" name="priority" class="modern-select">
                 ${priorities.map(p => `
-                  <option value="${p}" ${plan.priority === p ? 'selected' : (p === 'medium' ? 'selected' : '')}>
+                  <option value="${p}" ${plan.priority === p ? 'selected' : (p === 'medium' && !plan.priority ? 'selected' : '')}>
                     ${p.charAt(0).toUpperCase() + p.slice(1)}
                   </option>
                 `).join('')}
@@ -77,8 +92,12 @@ export function renderPlanForm(projects, plan = {}) {
           </div>
         </div>
 
+        <!-- SECTION 3: Schedule & Budget -->
         <div class="plan-form-section">
-          <h3 class="section-title"><i class="fas fa-calendar-alt"></i> Schedule & Budget</h3>
+          <h3 class="section-title">
+            <span class="section-icon"><i class="fas fa-calendar-alt"></i></span>
+            Schedule & Budget
+          </h3>
           
           <div class="form-row-2">
             <div class="form-field">
@@ -102,9 +121,13 @@ export function renderPlanForm(projects, plan = {}) {
           </div>
         </div>
 
-        ${plan.id ? `
+        <!-- SECTION 4: Status (only on edit) -->
+        ${isEdit ? `
         <div class="plan-form-section">
-          <h3 class="section-title"><i class="fas fa-chart-line"></i> Status</h3>
+          <h3 class="section-title">
+            <span class="section-icon"><i class="fas fa-chart-line"></i></span>
+            Status
+          </h3>
           <div class="form-field">
             <select id="plan-status" name="status" class="modern-select">
               ${statuses.map(s => `
@@ -117,8 +140,12 @@ export function renderPlanForm(projects, plan = {}) {
         </div>
         ` : ''}
 
+        <!-- SECTION 5: Description & Notes -->
         <div class="plan-form-section">
-          <h3 class="section-title"><i class="fas fa-align-left"></i> Details</h3>
+          <h3 class="section-title">
+            <span class="section-icon"><i class="fas fa-align-left"></i></span>
+            Details
+          </h3>
           
           <div class="form-field">
             <label for="plan-description">
@@ -137,12 +164,13 @@ export function renderPlanForm(projects, plan = {}) {
           </div>
         </div>
 
+        <!-- Form Actions -->
         <div class="plan-form-actions">
           <button type="button" class="btn btn-outline cancel-plan-btn">
             <i class="fas fa-times"></i> Cancel
           </button>
           <button type="submit" class="btn btn-primary save-plan-btn">
-            <i class="fas fa-check"></i> ${plan.id ? 'Update Plan' : 'Create Plan'}
+            <i class="fas fa-check"></i> ${isEdit ? 'Update Plan' : 'Create Plan'}
           </button>
         </div>
       </form>
