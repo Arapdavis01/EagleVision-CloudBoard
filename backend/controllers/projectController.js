@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 
+// ==================== BASIC PROJECT CRUD ====================
+
 exports.getAll = async (req, res) => {
   const { search } = req.query;
   let query = `SELECT * FROM projects`;
@@ -84,7 +86,8 @@ exports.remove = async (req, res) => {
   res.json({ message: 'Project deleted' });
 };
 
-// For public status page
+// ==================== PUBLIC STATUS PAGE ====================
+
 exports.getPublicStatus = async (req, res) => {
   const { token } = req.params;
   const { rows } = await pool.query('SELECT * FROM projects WHERE public_token = $1', [token]);
@@ -103,7 +106,27 @@ exports.getPublicStatus = async (req, res) => {
 // Get all updates for a specific project (with plan info if linked)
 exports.getProjectUpdates = async (req, res) => {
   const { projectId } = req.params;
+  const { sort } = req.query;
   try {
+    let orderBy = 'pu.created_at DESC';
+    
+    switch (sort) {
+      case 'date-asc':
+        orderBy = 'pu.created_at ASC';
+        break;
+      case 'date-desc':
+        orderBy = 'pu.created_at DESC';
+        break;
+      case 'cost-asc':
+        orderBy = 'pu.cost ASC NULLS LAST';
+        break;
+      case 'cost-desc':
+        orderBy = 'pu.cost DESC NULLS LAST';
+        break;
+      default:
+        orderBy = 'pu.created_at DESC';
+    }
+
     const { rows } = await pool.query(
       `SELECT pu.*, 
               sp.id as plan_id, 
@@ -113,7 +136,7 @@ exports.getProjectUpdates = async (req, res) => {
        FROM project_updates pu
        LEFT JOIN service_plans sp ON sp.update_id = pu.id
        WHERE pu.project_id = $1
-       ORDER BY pu.created_at DESC`,
+       ORDER BY ${orderBy}`,
       [projectId]
     );
     res.json(rows);
@@ -229,5 +252,262 @@ exports.reviewAndUpdate = async (req, res) => {
     res.status(500).json({ error: 'Failed to complete review & update' });
   } finally {
     client.release();
+  }
+};
+
+// ==================== PROJECT HEALTH SCORE ====================
+
+// Calculate and get project health score
+exports.getProjectHealth = async (req, res) => {
+  const { projectId } = req.params;
+
+  try {
+    // Get project details
+    const { rows: projectRows } = await pool.query(
+      'SELECT * FROM projects WHERE id = $1',
+      [projectId]
+    );
+
+    if (projectRows.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const project = projectRows[0];
+
+    // Get update statistics
+    const { rows: updateStats } = await pool.query(
+      `SELECT 
+        COUNT(*) as total_updates,
+        MAX(created_at) as last_update_date,
+        COALESCE(SUM(cost), 0) as total_cost,
+        COALESCE(AVG(cost), 0) as avg_cost
+       FROM project_updates
+       WHERE project_id = $1`,
+      [projectId]
+    );
+
+    const stats = updateStats[0];
+
+    // Get overdue plans count
+    const { rows: overdueRows } = await pool.query(
+      `SELECT COUNT(*) as overdue_count
+       FROM service_plans
+       WHERE project_id = $1 
+         AND status = 'planned' 
+         AND target_date < CURRENT_DATE`,
+      [projectId]
+    );
+
+    const overdueCount = parseInt(overdueRows[0].overdue_count) || 0;
+
+    // Get active (in-progress) plans count
+    const { rows: activeRows } = await pool.query(
+      `SELECT COUNT(*) as active_count
+       FROM service_plans
+       WHERE project_id = $1 AND status = 'in_progress'`,
+      [projectId]
+    );
+
+    const activeCount = parseInt(activeRows[0].active_count) || 0;
+
+    // Get total plans count
+    const { rows: planRows } = await pool.query(
+      `SELECT COUNT(*) as total_plans
+       FROM service_plans
+       WHERE project_id = $1`,
+      [projectId]
+    );
+
+    const totalPlans = parseInt(planRows[0].total_plans) || 0;
+
+    // Calculate days since last update
+    const lastUpdate = stats.last_update_date ? new Date(stats.last_update_date) : null;
+    const now = new Date();
+    const daysSinceLastUpdate = lastUpdate 
+      ? Math.floor((now - lastUpdate) / (1000 * 60 * 60 * 24))
+      : 999;
+
+    // Check if there's a recent update (within last 14 days)
+    const hasRecentUpdate = daysSinceLastUpdate <= 14;
+
+    // Check if next review is overdue
+    const nextReviewDate = project.next_review_date ? new Date(project.next_review_date) : null;
+    const isReviewOverdue = nextReviewDate && nextReviewDate < now;
+
+    // Calculate health score (0-100)
+    let score = 100;
+
+    // Deduct for overdue plans (up to 30 points)
+    score -= Math.min(overdueCount * 10, 30);
+
+    // Deduct for inactivity (up to 30 points)
+    if (daysSinceLastUpdate > 90) {
+      score -= 30;
+    } else if (daysSinceLastUpdate > 60) {
+      score -= 20;
+    } else if (daysSinceLastUpdate > 30) {
+      score -= 10;
+    }
+
+    // Deduct for overdue review (10 points)
+    if (isReviewOverdue) {
+      score -= 10;
+    }
+
+    // Deduct for stale project status (Archived) (10 points)
+    if (project.status === 'Archived') {
+      score -= 10;
+    }
+
+    // Add bonus for recent activity (5 points)
+    if (hasRecentUpdate) {
+      score += 5;
+    }
+
+    // Add bonus for active plans (up to 5 points)
+    if (activeCount > 0) {
+      score += 5;
+    }
+
+    // Ensure score is between 0 and 100
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    // Determine health level
+    let level, color, icon;
+    if (score >= 80) {
+      level = 'Excellent';
+      color = '#10b981';
+      icon = 'fa-check-circle';
+    } else if (score >= 60) {
+      level = 'Good';
+      color = '#3b82f6';
+      icon = 'fa-thumbs-up';
+    } else if (score >= 40) {
+      level = 'Fair';
+      color = '#f59e0b';
+      icon = 'fa-exclamation-triangle';
+    } else {
+      level = 'Poor';
+      color = '#ef4444';
+      icon = 'fa-times-circle';
+    }
+
+    res.json({
+      score,
+      level,
+      color,
+      icon,
+      metrics: {
+        totalUpdates: parseInt(stats.total_updates) || 0,
+        totalCost: parseFloat(stats.total_cost) || 0,
+        avgCost: parseFloat(stats.avg_cost) || 0,
+        overdueCount,
+        activeCount,
+        totalPlans,
+        daysSinceLastUpdate,
+        hasRecentUpdate,
+        isReviewOverdue,
+        lastUpdateDate: stats.last_update_date,
+        nextReviewDate: project.next_review_date,
+        projectStatus: project.status
+      }
+    });
+  } catch (err) {
+    console.error('Failed to calculate project health:', err);
+    res.status(500).json({ error: 'Failed to calculate project health' });
+  }
+};
+
+// ==================== PROJECT COST ANALYTICS ====================
+
+// Get cost analytics for a project
+exports.getProjectCostAnalytics = async (req, res) => {
+  const { projectId } = req.params;
+  const { months = 6 } = req.query;
+
+  try {
+    // Get updates grouped by month
+    const { rows: updates } = await pool.query(
+      `SELECT 
+        DATE_TRUNC('month', created_at) as month,
+        COUNT(*) as update_count,
+        COALESCE(SUM(cost), 0) as total_cost
+       FROM project_updates
+       WHERE project_id = $1
+         AND created_at >= NOW() - INTERVAL '${parseInt(months)} months'
+       GROUP BY DATE_TRUNC('month', created_at)
+       ORDER BY month ASC`,
+      [projectId]
+    );
+
+    // Get update type breakdown
+    const { rows: typeBreakdown } = await pool.query(
+      `SELECT 
+        update_type,
+        COUNT(*) as count,
+        COALESCE(SUM(cost), 0) as total_cost
+       FROM project_updates
+       WHERE project_id = $1
+       GROUP BY update_type
+       ORDER BY total_cost DESC`,
+      [projectId]
+    );
+
+    // Get plan cost summary
+    const { rows: planSummary } = await pool.query(
+      `SELECT 
+        status,
+        COUNT(*) as count,
+        COALESCE(SUM(estimated_cost), 0) as total_estimated_cost
+       FROM service_plans
+       WHERE project_id = $1
+       GROUP BY status`,
+      [projectId]
+    );
+
+    // Get total costs
+    const { rows: totals } = await pool.query(
+      `SELECT 
+        COALESCE(SUM(cost), 0) as total_cost,
+        COUNT(*) as total_updates
+       FROM project_updates
+       WHERE project_id = $1`,
+      [projectId]
+    );
+
+    // Format monthly data for chart
+    const labels = [];
+    const values = [];
+    
+    updates.forEach(u => {
+      const date = new Date(u.month);
+      labels.push(date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }));
+      values.push(parseFloat(u.total_cost));
+    });
+
+    res.json({
+      monthly: {
+        labels,
+        values,
+        raw: updates
+      },
+      byType: typeBreakdown.map(t => ({
+        type: t.update_type,
+        count: parseInt(t.count),
+        totalCost: parseFloat(t.total_cost)
+      })),
+      byPlanStatus: planSummary.map(p => ({
+        status: p.status,
+        count: parseInt(p.count),
+        totalEstimatedCost: parseFloat(p.total_estimated_cost)
+      })),
+      totals: {
+        totalCost: parseFloat(totals[0].total_cost),
+        totalUpdates: parseInt(totals[0].total_updates)
+      }
+    });
+  } catch (err) {
+    console.error('Failed to fetch cost analytics:', err);
+    res.status(500).json({ error: 'Failed to fetch cost analytics' });
   }
 };
