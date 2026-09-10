@@ -3,6 +3,8 @@ import { projectService } from '../../services/projectService.js';
 import { showModal } from '../../components/modal.js';
 import { renderUpdateForm } from '../../components/updateForm.js';
 import { renderReviewUpdateForm } from '../../components/reviewUpdateForm.js';
+import { renderProjectHealthScore } from '../../components/projectHealthScore.js';
+import { renderCostChart, prepareCostData } from '../../components/costCharts.js';
 import { showToast } from '../../utils/notifications.js';
 import { confirmDialog } from '../../utils/confirm.js';
 
@@ -45,17 +47,20 @@ export async function serviceRecordPage() {
         </button>
       </div>
 
-      <!-- Project Summary Header -->
+      <!-- Project Summary Header with Health Score -->
       <div id="project-summary" class="card compact-card hidden">
-        <div class="project-summary-header">
-          <h3 id="summary-project-name"></h3>
-          <span id="summary-client" class="badge badge-upcoming"></span>
-          <span id="summary-status" class="status"></span>
+        <div class="project-summary-wrapper">
+          <div class="project-summary-header">
+            <h3 id="summary-project-name"></h3>
+            <span id="summary-client" class="badge badge-upcoming"></span>
+            <span id="summary-status" class="status"></span>
+          </div>
+          <div id="health-score-container" class="health-score-wrapper"></div>
         </div>
       </div>
 
-      <!-- Summary KPI Cards -->
-      <div id="summary-kpi-container" class="kpi-grid hidden">
+      <!-- Summary KPI Cards + Cost Chart -->
+      <div id="summary-kpi-container" class="kpi-grid hidden" style="grid-template-columns: repeat(5, 1fr);">
         <div class="card kpi-card compact-kpi">
           <i class="fas fa-clipboard-list kpi-icon"></i>
           <h3>Total Updates</h3>
@@ -76,6 +81,27 @@ export async function serviceRecordPage() {
           <h3>Avg Cost</h3>
           <div class="value" id="kpi-avg-cost">$0</div>
         </div>
+        <div class="card kpi-card compact-kpi">
+          <i class="fas fa-exclamation-triangle kpi-icon"></i>
+          <h3>Overdue Plans</h3>
+          <div class="value" id="kpi-overdue-count">0</div>
+        </div>
+      </div>
+
+      <!-- Cost Trend Chart -->
+      <div id="cost-chart-container" class="chart-container hidden">
+        <h3><i class="fas fa-chart-line"></i> Cost Trend</h3>
+        <canvas id="costChartCanvas"></canvas>
+      </div>
+
+      <!-- Quick Filter Chips -->
+      <div id="quick-filters-container" class="quick-filters-container hidden">
+        <span class="quick-filters-label">Quick Filters:</span>
+        <button class="quick-filter-chip" data-filter="all">All</button>
+        <button class="quick-filter-chip" data-filter="this-month">This Month</button>
+        <button class="quick-filter-chip" data-filter="last-30">Last 30 Days</button>
+        <button class="quick-filter-chip" data-filter="high-cost">High Cost ($500+)</button>
+        <button class="quick-filter-chip" data-filter="with-plan">With Plan</button>
       </div>
 
       <!-- View Toggle -->
@@ -99,7 +125,7 @@ export async function serviceRecordPage() {
   const escapeHtml = (text) =>
     text ? text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
 
-  // State
+  // ==================== STATE ====================
   let allProjects = [];
   let selectedProjectId = '';
   let allUpdates = [];
@@ -108,7 +134,11 @@ export async function serviceRecordPage() {
   let dateFrom = '';
   let dateTo = '';
   let currentView = 'table';
+  let currentQuickFilter = 'all';
+  let healthData = null;
+  let costChartInstance = null;
 
+  // ==================== DOM ELEMENTS ====================
   const projectSelect = document.getElementById('project-select');
   const addUpdateBtn = document.getElementById('add-update-btn');
   const reviewUpdateBtn = document.getElementById('review-update-btn');
@@ -123,6 +153,11 @@ export async function serviceRecordPage() {
   const printBtn = document.getElementById('print-record-btn');
   const projectSummary = document.getElementById('project-summary');
   const summaryKpiContainer = document.getElementById('summary-kpi-container');
+  const costChartContainer = document.getElementById('cost-chart-container');
+  const quickFiltersContainer = document.getElementById('quick-filters-container');
+  const healthScoreContainer = document.getElementById('health-score-container');
+
+  // ==================== DATA LOADING ====================
 
   async function loadProjects() {
     try {
@@ -152,6 +187,7 @@ export async function serviceRecordPage() {
     try {
       allUpdates = await projectService.getUpdates(projectId);
       updateProjectSummaryAndKPIs();
+      await loadHealthAndAnalytics(projectId);
       renderUpdates();
     } catch (err) {
       console.error('Failed to load updates:', err);
@@ -162,10 +198,51 @@ export async function serviceRecordPage() {
     }
   }
 
+  async function loadHealthAndAnalytics(projectId) {
+    try {
+      // Load health score
+      healthData = await projectService.getHealth(projectId);
+      
+      if (healthScoreContainer && healthData) {
+        healthScoreContainer.innerHTML = renderProjectHealthScore(healthData.score);
+      }
+
+      // Update overdue count KPI
+      const overdueEl = document.getElementById('kpi-overdue-count');
+      if (overdueEl && healthData?.metrics) {
+        overdueEl.textContent = healthData.metrics.overdueCount || 0;
+      }
+    } catch (err) {
+      console.warn('Failed to load health score:', err);
+    }
+
+    try {
+      // Load cost analytics and render chart
+      const analytics = await projectService.getCostAnalytics(projectId, 6);
+      
+      if (analytics && analytics.monthly && analytics.monthly.labels.length > 0) {
+        costChartContainer.classList.remove('hidden');
+        
+        setTimeout(() => {
+          costChartInstance = renderCostChart('costChartCanvas', {
+            labels: analytics.monthly.labels,
+            values: analytics.monthly.values
+          });
+        }, 100);
+      } else {
+        costChartContainer.classList.add('hidden');
+      }
+    } catch (err) {
+      console.warn('Failed to load cost analytics:', err);
+      costChartContainer.classList.add('hidden');
+    }
+  }
+
   function updateProjectSummaryAndKPIs() {
     if (selectedProjectId) {
       projectSummary.classList.remove('hidden');
       summaryKpiContainer.classList.remove('hidden');
+      quickFiltersContainer.classList.remove('hidden');
 
       const project = allProjects.find(p => p.id == selectedProjectId);
       if (project) {
@@ -188,6 +265,34 @@ export async function serviceRecordPage() {
     } else {
       projectSummary.classList.add('hidden');
       summaryKpiContainer.classList.add('hidden');
+      costChartContainer.classList.add('hidden');
+      quickFiltersContainer.classList.add('hidden');
+    }
+  }
+
+  // ==================== FILTERING ====================
+
+  function applyQuickFilter(updates) {
+    const now = new Date();
+    
+    switch (currentQuickFilter) {
+      case 'this-month':
+        return updates.filter(u => {
+          const d = new Date(u.created_at);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+      case 'last-30':
+        return updates.filter(u => {
+          const d = new Date(u.created_at);
+          const diff = (now - d) / (1000 * 60 * 60 * 24);
+          return diff <= 30;
+        });
+      case 'high-cost':
+        return updates.filter(u => parseFloat(u.cost || 0) >= 500);
+      case 'with-plan':
+        return updates.filter(u => u.plan_id);
+      default:
+        return updates;
     }
   }
 
@@ -213,8 +318,13 @@ export async function serviceRecordPage() {
       filtered = filtered.filter(u => new Date(u.created_at).toISOString().slice(0,10) <= dateTo);
     }
 
+    // Apply quick filter
+    filtered = applyQuickFilter(filtered);
+
     return filtered;
   }
+
+  // ==================== RENDERING ====================
 
   function renderUpdates() {
     if (!selectedProjectId) {
@@ -311,7 +421,7 @@ export async function serviceRecordPage() {
         ${items.map(u => {
           const { icon, colorClass } = getUpdateTypeVisual(u.update_type);
           return `
-            <div class="timeline-item">
+            <div class="timeline-item" data-id="${u.id}">
               <div class="timeline-icon ${colorClass}">
                 <i class="fas ${icon}"></i>
               </div>
@@ -348,6 +458,8 @@ export async function serviceRecordPage() {
     }
   }
 
+  // ==================== EVENT LISTENERS ====================
+
   projectSelect.addEventListener('change', async () => {
     selectedProjectId = projectSelect.value;
     addUpdateBtn.disabled = !selectedProjectId;
@@ -356,10 +468,17 @@ export async function serviceRecordPage() {
     typeFilter = 'all';
     dateFrom = '';
     dateTo = '';
+    currentQuickFilter = 'all';
     searchInput.value = '';
     typeFilterSelect.value = 'all';
     dateFromInput.value = '';
     dateToInput.value = '';
+
+    // Reset quick filter chips
+    document.querySelectorAll('.quick-filter-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.filter === 'all');
+    });
+
     if (selectedProjectId) {
       await loadUpdates(selectedProjectId);
     } else {
@@ -382,6 +501,7 @@ export async function serviceRecordPage() {
     dateFrom = e.target.value;
     renderUpdates();
   });
+
   dateToInput.addEventListener('change', e => {
     dateTo = e.target.value;
     renderUpdates();
@@ -396,6 +516,21 @@ export async function serviceRecordPage() {
     typeFilter = 'all';
     dateFrom = '';
     dateTo = '';
+    currentQuickFilter = 'all';
+    document.querySelectorAll('.quick-filter-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.filter === 'all');
+    });
+    renderUpdates();
+  });
+
+  // Quick filter chips
+  quickFiltersContainer.addEventListener('click', (e) => {
+    const chip = e.target.closest('.quick-filter-chip');
+    if (!chip) return;
+    
+    document.querySelectorAll('.quick-filter-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    currentQuickFilter = chip.dataset.filter;
     renderUpdates();
   });
 
@@ -538,5 +673,6 @@ export async function serviceRecordPage() {
     }
   });
 
+  // Initialize
   loadProjects();
 }
