@@ -3181,3 +3181,140 @@ body.app-dashboard .chart-review-row .compact-chart canvas {
 .plan-form-actions .btn {
   min-width: 120px;
 }
+/* ================================================================
+   PLAN TEMPLATES SELECTOR
+   ================================================================ */
+
+.plan-templates-container {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px dashed rgba(26, 71, 42, 0.15);
+}
+
+.plan-templates-section {
+  width: 100%;
+}
+
+.templates-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1a472a;
+  margin-bottom: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.templates-title i {
+  color: #c49a2b;
+}
+
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.template-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  font-family: inherit;
+}
+
+.template-card:hover {
+  border-color: #1a472a;
+  background: rgba(26, 71, 42, 0.03);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 71, 42, 0.15);
+}
+
+.template-card.selected {
+  border-color: #1a472a;
+  background: rgba(26, 71, 42, 0.08);
+}
+
+.template-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1a472a, #c49a2b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.template-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.template-info strong {
+  font-size: 0.8rem;
+  color: #1e293b;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.template-info span {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.template-info em {
+  font-size: 0.75rem;
+  color: #1a472a;
+  font-weight: 700;
+  font-style: normal;
+}
+
+.templates-empty {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  text-align: center;
+  padding: 0.5rem;
+}
+
+/* ================================================================
+   ENHANCED PLAN FORM SECTIONS
+   ================================================================ */
+
+.plan-form-section .section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.section-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(26, 71, 42, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a472a;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 480px) {
+  .templates-grid {
+    grid-template-columns: 1fr;
+  }
+}
