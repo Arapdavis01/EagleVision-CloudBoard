@@ -10,6 +10,14 @@ const pool = new Pool({
   }
 });
 
+// ==================== WARM-UP ON STARTUP ====================
+// Establishes the first DB connection immediately so the first user
+// request doesn't pay the TCP + SSL handshake cost.
+pool.query('SELECT 1')
+  .then(() => console.log('✅ DB pool warmed up'))
+  .catch(err => console.error('❌ DB warm-up failed:', err.message));
+
+// ==================== ERROR HANDLING ====================
 // Log errors but do NOT crash the process
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err.message);
