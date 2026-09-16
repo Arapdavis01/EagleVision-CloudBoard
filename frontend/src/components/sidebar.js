@@ -4,11 +4,26 @@ export function renderSidebar() {
   return `
     <div class="sidebar">
       <h1><i class="fas fa-eye"></i> EagleVision</h1>
-      <a href="#dashboard" class="nav-link" data-page="dashboard"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-      <a href="#projects" class="nav-link" data-page="projects"><i class="fas fa-folder-open"></i> Projects</a>
-      <a href="#showcase" class="nav-link" data-page="showcase"><i class="fas fa-images"></i> Project Showcase</a>
-      <a href="#service-planner" class="nav-link" data-page="service-planner"><i class="fas fa-clipboard-list"></i> Service Planner</a>
-      <a href="#service-record" class="nav-link" data-page="service-record"><i class="fas fa-history"></i> Service Record</a>
+
+      <a href="#dashboard" class="nav-link" data-page="dashboard">
+        <i class="fas fa-tachometer-alt"></i> Dashboard
+      </a>
+
+      <a href="#projects" class="nav-link" data-page="projects">
+        <i class="fas fa-folder-open"></i> Projects
+      </a>
+
+      <a href="#showcase" class="nav-link" data-page="showcase">
+        <i class="fas fa-images"></i> Project Showcase
+      </a>
+
+      <a href="#service-planner" class="nav-link" data-page="service-planner">
+        <i class="fas fa-clipboard-list"></i> Service Planner
+      </a>
+
+      <a href="#service-record" class="nav-link" data-page="service-record">
+        <i class="fas fa-history"></i> Service Record
+      </a>
 
       <!-- Finance Dropdown -->
       <div class="nav-dropdown">
@@ -26,8 +41,19 @@ export function renderSidebar() {
         </div>
       </div>
 
-      <a href="#alerts" class="nav-link" data-page="alerts"><i class="fas fa-exclamation-triangle"></i> Alerts</a>
-      <button id="logout-btn" class="btn logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</button>
+      <a href="#alerts" class="nav-link" data-page="alerts">
+        <i class="fas fa-exclamation-triangle"></i> Alerts
+      </a>
+
+      <!-- Theme toggle -->
+      <button id="theme-toggle-btn" class="theme-toggle-btn">
+        <i class="fas fa-moon"></i> <span>Dark Mode</span>
+      </button>
+
+      <!-- Logout -->
+      <button id="logout-btn" class="btn logout-btn">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </button>
     </div>
   `;
 }
@@ -69,7 +95,27 @@ export function initSidebar() {
     });
   }
 
-  // Logout
+  // ==================== THEME TOGGLE ====================
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  if (themeToggleBtn) {
+    // Load saved theme on sidebar render
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      document.body.classList.add('dark-theme');
+      themeToggleBtn.innerHTML = '<i class="fas fa-sun"></i> <span>Light Mode</span>';
+    }
+
+    // Toggle on click
+    themeToggleBtn.addEventListener('click', () => {
+      const isDark = document.body.classList.toggle('dark-theme');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      themeToggleBtn.innerHTML = isDark
+        ? '<i class="fas fa-sun"></i> <span>Light Mode</span>'
+        : '<i class="fas fa-moon"></i> <span>Dark Mode</span>';
+    });
+  }
+
+  // ==================== LOGOUT ====================
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
