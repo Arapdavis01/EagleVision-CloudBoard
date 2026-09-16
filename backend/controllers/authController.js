@@ -5,30 +5,49 @@ const pool = require('../config/db');
 const { jwtSecret, jwtExpiresIn } = require('../config/auth');
 const loginSessionService = require('../services/loginSessionService');
 
+// ==================== EMAIL / PASSWORD LOGIN ====================
+
 exports.login = async (req, res) => {
   const { email, password } = req.body;
+
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
+  const startTime = Date.now();
+
   try {
-    const { rows } = await pool.query('SELECT * FROM admins WHERE email = $1', [email]);
+    // 1. Fetch admin (select only needed columns + LIMIT 1 for speed)
+    const { rows } = await pool.query(
+      'SELECT id, email, password_hash FROM admins WHERE email = $1 LIMIT 1',
+      [email]
+    );
+
+    const dbTime = Date.now() - startTime;
+
     if (rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const admin = rows[0];
+
+    // 2. Compare password (CPU-bound)
+    const bcryptStart = Date.now();
     const match = await bcrypt.compare(password, admin.password_hash);
+    const bcryptTime = Date.now() - bcryptStart;
+
     if (!match) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // 3. Sign JWT
     const token = jwt.sign(
       { adminId: admin.id, email: admin.email },
       jwtSecret,
       { expiresIn: jwtExpiresIn }
     );
 
+    // 4. Set cookie
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -36,17 +55,21 @@ exports.login = async (req, res) => {
       maxAge: 2 * 60 * 60 * 1000
     });
 
-    // Send response immediately
+    // 5. Send response FIRST (fastest possible)
     res.json({ message: 'Login successful', email: admin.email, token });
 
-    // Fire-and-forget audit log – do not block the response
+    // 6. Fire-and-forget audit log (non-blocking)
     pool.query(
       'INSERT INTO admin_audit_logs (admin_id, action, details) VALUES ($1, $2, $3)',
       [admin.id, 'LOGIN', `Login at ${new Date().toISOString()}`]
     ).catch(err => console.error('Audit log insert failed:', err));
 
+    // 7. Log timing breakdown
+    console.log(
+      `[LOGIN] ${email} — DB: ${dbTime}ms, bcrypt: ${bcryptTime}ms, total: ${Date.now() - startTime}ms`
+    );
   } catch (err) {
-    console.error(err);
+    console.error('Login error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -122,7 +145,7 @@ exports.checkLoginSessionStatus = async (req, res) => {
         { expiresIn: jwtExpiresIn }
       );
 
-      // Mark session as used (single‑use)
+      // Mark session as used (single-use)
       await loginSessionService.markSessionUsed(token);
 
       return res.json({
@@ -147,7 +170,7 @@ exports.checkLoginSessionStatus = async (req, res) => {
  */
 exports.approveLoginSession = async (req, res) => {
   const { token } = req.params;
-  const { pin } = req.body;                     // PIN sent from phone
+  const { pin } = req.body; // PIN sent from phone
 
   if (!pin) {
     return res.status(400).json({ error: 'PIN is required.' });
