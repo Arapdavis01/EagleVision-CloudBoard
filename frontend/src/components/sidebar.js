@@ -45,7 +45,7 @@ export function renderSidebar() {
         <i class="fas fa-exclamation-triangle"></i> Alerts
       </a>
 
-      <!-- Theme toggle -->
+      <!-- Theme Toggle -->
       <button id="theme-toggle-btn" class="theme-toggle-btn">
         <i class="fas fa-moon"></i> <span>Dark Mode</span>
       </button>
@@ -59,7 +59,7 @@ export function renderSidebar() {
 }
 
 export function initSidebar() {
-  // Extract base page and section from hash
+  // ==================== HIGHLIGHT ACTIVE LINK ====================
   const fullHash = location.hash.replace('#', '');
   const [base, queryString] = fullHash.split('?');
   const currentPage = base || 'dashboard';
@@ -86,7 +86,7 @@ export function initSidebar() {
     }
   });
 
-  // Toggle finance dropdown menu
+  // ==================== FINANCE DROPDOWN ====================
   const financeToggle = document.getElementById('finance-toggle');
   const financeMenu = document.getElementById('finance-menu');
   if (financeToggle && financeMenu) {
@@ -98,18 +98,24 @@ export function initSidebar() {
   // ==================== THEME TOGGLE ====================
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   if (themeToggleBtn) {
-    // Load saved theme on sidebar render
+    // Load saved theme (falls back to system preference on first visit)
     const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
+    const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = savedTheme === 'dark' || (!savedTheme && systemPrefersDark);
+
+    if (isDark) {
       document.body.classList.add('dark-theme');
       themeToggleBtn.innerHTML = '<i class="fas fa-sun"></i> <span>Light Mode</span>';
+    } else {
+      document.body.classList.remove('dark-theme');
+      themeToggleBtn.innerHTML = '<i class="fas fa-moon"></i> <span>Dark Mode</span>';
     }
 
     // Toggle on click
     themeToggleBtn.addEventListener('click', () => {
-      const isDark = document.body.classList.toggle('dark-theme');
-      localStorage.setItem('theme', isDark ? 'dark' : 'light');
-      themeToggleBtn.innerHTML = isDark
+      const nowDark = document.body.classList.toggle('dark-theme');
+      localStorage.setItem('theme', nowDark ? 'dark' : 'light');
+      themeToggleBtn.innerHTML = nowDark
         ? '<i class="fas fa-sun"></i> <span>Light Mode</span>'
         : '<i class="fas fa-moon"></i> <span>Dark Mode</span>';
     });
