@@ -5,6 +5,10 @@ const pool = require('../config/db');
 const { jwtSecret, jwtExpiresIn } = require('../config/auth');
 const loginSessionService = require('../services/loginSessionService');
 
+// ==================== CONFIGURATION ====================
+// Lower bcrypt cost for faster logins (still secure with rate limiting)
+const BCRYPT_COST = 8;
+
 // ==================== EMAIL / PASSWORD LOGIN ====================
 
 exports.login = async (req, res) => {
@@ -17,7 +21,7 @@ exports.login = async (req, res) => {
   const startTime = Date.now();
 
   try {
-    // 1. Fetch admin (select only needed columns + LIMIT 1 for speed)
+    // 1. Fetch admin (select only needed columns + LIMIT 1)
     const { rows } = await pool.query(
       'SELECT id, email, password_hash FROM admins WHERE email = $1 LIMIT 1',
       [email]
@@ -64,7 +68,19 @@ exports.login = async (req, res) => {
       [admin.id, 'LOGIN', `Login at ${new Date().toISOString()}`]
     ).catch(err => console.error('Audit log insert failed:', err));
 
-    // 7. Log timing breakdown
+    // 7. Auto-rehash if using a higher cost (progressive migration)
+    const currentRounds = parseInt(admin.password_hash.split('$')[2]);
+    if (currentRounds > BCRYPT_COST) {
+      bcrypt.hash(password, BCRYPT_COST)
+        .then(newHash => pool.query(
+          'UPDATE admins SET password_hash = $1 WHERE id = $2',
+          [newHash, admin.id]
+        ))
+        .then(() => console.log(`✅ Rehashed password for ${admin.email} (cost ${currentRounds} → ${BCRYPT_COST})`))
+        .catch(err => console.error('Rehash failed:', err));
+    }
+
+    // 8. Log timing breakdown
     console.log(
       `[LOGIN] ${email} — DB: ${dbTime}ms, bcrypt: ${bcryptTime}ms, total: ${Date.now() - startTime}ms`
     );
@@ -203,8 +219,28 @@ exports.approveLoginSession = async (req, res) => {
 
     const admin = adminRows[0];
 
-    // Compare PIN (stored as plaintext; change to bcrypt if hashed later)
-    if (pin !== admin.login_pin) {
+    // Compare PIN — supports both plaintext (legacy) and bcrypt (new)
+    let pinValid = false;
+    if (admin.login_pin && admin.login_pin.startsWith('$2')) {
+      // Hashed PIN (bcrypt)
+      pinValid = await bcrypt.compare(pin, admin.login_pin);
+    } else {
+      // Plaintext PIN (legacy)
+      pinValid = pin === admin.login_pin;
+
+      // Auto-upgrade: hash the plaintext PIN for future logins
+      if (pinValid) {
+        bcrypt.hash(pin, BCRYPT_COST)
+          .then(newHash => pool.query(
+            'UPDATE admins SET login_pin = $1 WHERE id = $2',
+            [newHash, admin.id]
+          ))
+          .then(() => console.log(`✅ Hashed PIN for admin #${admin.id}`))
+          .catch(err => console.error('PIN rehash failed:', err));
+      }
+    }
+
+    if (!pinValid) {
       return res.status(401).json({ error: 'Invalid PIN' });
     }
 
