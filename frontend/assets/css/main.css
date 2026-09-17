@@ -441,28 +441,81 @@ code, pre, kbd {
   z-index: 2;
 }
 
-.sidebar h1 {
+/* ---------- Brand Lockup: Logo + EagleVision + 👥 + Qoech Tech ---------- */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.5rem;
+  padding: 0 0.6rem 1.2rem;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+/* Big logo container — 72×72, holds the image */
+.sidebar-brand-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow:
+    0 0 24px rgba(62, 224, 127, 0.25),
+    0 0 12px rgba(90, 200, 250, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  line-height: 1.15;
+  min-width: 0;
+}
+
+/* Line 1 — EagleVision (large, gradient) */
+.sidebar-brand-title {
   font-family: var(--font-display);
   font-size: 1.15rem;
   font-weight: 800;
-  letter-spacing: 0.05em;
-  margin-bottom: 1.5rem;
-  padding: 0 0.6rem 1rem;
-  border-bottom: 1px solid var(--border-dim);
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
+  letter-spacing: 0.04em;
   background: linear-gradient(135deg, #FFFFFF 0%, var(--primary) 55%, var(--cyan) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-.sidebar h1 i {
-  -webkit-text-fill-color: var(--primary);
-  filter: drop-shadow(0 0 12px var(--primary-glow));
-  font-size: 1.15rem;
+  white-space: nowrap;
 }
 
+/* Line 2 — Big team icon */
+.sidebar-brand-icon {
+  font-size: 1.4rem;
+  color: var(--primary);
+  filter: drop-shadow(0 0 10px var(--primary-glow));
+  margin: 0.05rem 0;
+  line-height: 1;
+}
+
+/* Line 3 — Qoech Tech (small, muted) */
+.sidebar-brand-sub {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* ---------- Sidebar Nav Links ---------- */
 .sidebar a {
   display: flex;
   align-items: center;
@@ -498,6 +551,7 @@ code, pre, kbd {
   filter: drop-shadow(0 0 8px var(--primary-glow));
 }
 
+/* ---------- Finance Dropdown ---------- */
 .nav-dropdown { position: relative; }
 
 .sidebar .dropdown-toggle {
@@ -561,6 +615,7 @@ code, pre, kbd {
   color: var(--primary);
 }
 
+/* ---------- Logout ---------- */
 .logout-btn {
   margin-top: auto;
   background: rgba(255, 92, 92, 0.08);
@@ -586,8 +641,6 @@ code, pre, kbd {
   transform: translateY(-2px);
   box-shadow: 0 0 22px rgba(255, 92, 92, 0.2);
 }
-
-
 /* ============================================================
    07. THEME TOGGLE
    ============================================================ */
