@@ -852,7 +852,83 @@ code, pre, kbd {
   border-bottom: 1px solid var(--border-dim);
 }
 .login-divider span { padding: 0 0.8rem; }
+/* ============================================================
+   LOGIN PAGE — Additional modern features
+   ============================================================ */
 
+/* Caps Lock warning */
+.caps-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--status-warn);
+  margin-top: 0.4rem;
+  letter-spacing: 0.03em;
+  animation: capsFadeIn 0.25s ease;
+}
+
+.caps-warning i {
+  font-size: 0.75rem;
+  filter: drop-shadow(0 0 6px rgba(255, 138, 61, 0.4));
+}
+
+@keyframes capsFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Input shake on error */
+.input-shake {
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  border-color: var(--status-error) !important;
+  box-shadow: 0 0 0 3px rgba(255, 92, 92, 0.15), var(--glow-error) !important;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
+}
+
+/* Loading state — button and inputs */
+.login-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.login-form .form-group input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-card);
+}
+
+/* Forgot password link (options row) */
+.login-form-options .forgot-link {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+  transition: var(--transition-fast);
+}
+
+.login-form-options .forgot-link:hover {
+  color: var(--cyan);
+}
+
+/* Contact link in footer */
+.login-form-footer .login-link {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  transition: var(--transition-fast);
+}
+
+.login-form-footer .login-link:hover {
+  color: var(--cyan);
+}
 
 /* ============================================================
    09. QR LOGIN & APPROVE LOGIN
