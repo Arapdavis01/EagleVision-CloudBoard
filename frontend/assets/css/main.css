@@ -3329,7 +3329,22 @@ tr:hover td { background: rgba(62, 224, 127, 0.03); }
 body.modal-open {
   overflow: hidden;
 }
+/* ---------- Exit Animations ---------- */
+@keyframes modalOverlayOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
 
+@keyframes modalSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+}
 /* ---------- Close Button (top-right) ---------- */
 .modal-close-btn,
 .modal-content > .close-btn {
