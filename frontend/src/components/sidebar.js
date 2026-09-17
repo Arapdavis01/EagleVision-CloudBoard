@@ -3,7 +3,17 @@ import { authService } from '../services/authService.js';
 export function renderSidebar() {
   return `
     <div class="sidebar">
-      <h1><i class="fas fa-eye"></i> EagleVision</h1>
+      <!-- Brand Lockup: Logo Image + EagleVision + 👥 + Qoech Tech -->
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-logo">
+          <img src="assets/images/logo.png" alt="EagleVision Logo" />
+        </div>
+        <div class="sidebar-brand-text">
+          <span class="sidebar-brand-title">EagleVision</span>
+          <i class="fas fa-users sidebar-brand-icon"></i>
+          <span class="sidebar-brand-sub">Qoech Tech</span>
+        </div>
+      </div>
 
       <a href="#dashboard" class="nav-link" data-page="dashboard">
         <i class="fas fa-tachometer-alt"></i> Dashboard
