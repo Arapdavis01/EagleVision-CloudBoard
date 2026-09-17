@@ -39,16 +39,17 @@ export async function loginPage() {
           </h1>
 
           <p class="login-brand-description">
-            A next-generation project management system for monitoring client portfolios,
-            tracking service records, and driving data-driven decisions.
+            Real-time monitoring, maintenance tracking, and operational
+            visibility for every system you run.
+            
           </p>
 
           <!-- Feature bullets -->
           <ul class="login-brand-features">
-            <li><i class="fas fa-check-circle"></i> Real-time system monitoring</li>
-            <li><i class="fas fa-check-circle"></i> Client portfolio tracking</li>
-            <li><i class="fas fa-check-circle"></i> Service planning &amp; records</li>
-            <li><i class="fas fa-check-circle"></i> Financial insights &amp; analytics</li>
+            <li><i class="fas fa-check-circle"></i> Live uptime & health monitoring</li>
+            <li><i class="fas fa-check-circle"></i> Service records & maintenance logs</li>
+            <li><i class="fas fa-check-circle"></i> Instant alerts when systems go silent</li>
+            <li><i class="fas fa-check-circle"></i> Complete infrastructure visibility</li>
           </ul>
 
           <!-- Footer on brand side -->
