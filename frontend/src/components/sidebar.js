@@ -6,7 +6,7 @@ export function renderSidebar() {
       <!-- Brand Lockup: Logo Image + EagleVision + 👥 + Qoech Tech -->
       <div class="sidebar-brand">
         <div class="sidebar-brand-logo">
-          <img src="assets/images/logo.png" alt="EagleVision Logo" />
+          <img src="assets/images/qoech-q.jpg" alt="EagleVision Logo" />
         </div>
         <div class="sidebar-brand-text">
           <span class="sidebar-brand-title">EagleVision</span>
