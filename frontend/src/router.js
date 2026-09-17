@@ -7,6 +7,7 @@ import { showcasePage } from './pages/showcase/showcase.js';
 import { serviceRecordPage } from './pages/serviceRecord/serviceRecord.js';
 import { servicePlannerPage } from './pages/servicePlanner/servicePlanner.js';
 import { approveLoginPage } from './pages/approveLogin/approveLogin.js';
+import { initCustomSelects } from './components/customSelect.js';
 
 const routes = {
   '#login': loginPage,
@@ -29,6 +30,10 @@ export async function initRouter() {
   if (pageLoader) {
     try {
       await pageLoader();
+
+      // ⬇️ After the page renders, convert all native <select> to custom dropdowns
+      initCustomSelects();
+
     } catch (err) {
       console.error('Page load error:', err);
       document.getElementById('app').innerHTML = '<p>Error loading page.</p>';
