@@ -7,6 +7,7 @@
  *   • ESC key to close
  *   • Body scroll lock
  *   • Smooth enter/exit animations
+ *   • Automatic custom-select conversion (all <select> → styled dropdowns)
  *   • Cleanup on close
  *
  * Usage:
@@ -15,6 +16,8 @@
  *   const modal = showModal(htmlString, { size: 'lg' });
  *   modal.close();
  */
+
+import { initCustomSelects } from './customSelect.js';
 
 export function showModal(contentHTML, options = {}) {
   // ---------- Options ----------
@@ -72,6 +75,13 @@ export function showModal(contentHTML, options = {}) {
 
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
+
+  // ---------- Auto-convert all <select> inside the modal to custom dropdowns ----------
+  try {
+    initCustomSelects(modal);
+  } catch (err) {
+    console.warn('initCustomSelects failed inside modal:', err);
+  }
 
   // ---------- Lock body scroll ----------
   document.body.classList.add('modal-open');
