@@ -74,7 +74,7 @@ export async function openRequestDetailModal(request, onUpdate) {
       </span>
     </div>
 
-    <div class="request-modal-body">
+    <div class="modal-body request-modal-body">
 
       <!-- CLIENT INFO -->
       <div class="request-detail-section">
