@@ -14,7 +14,9 @@ const alertRoutes = require('./routes/alerts');
 const uptimeRoutes = require('./routes/uptime');
 const publicRoutes = require('./routes/public');
 const uploadRoutes = require('./routes/upload');
-const servicePlanRoutes = require('./routes/servicePlans'); // ✅ NEW: Service Planner routes
+const servicePlanRoutes = require('./routes/servicePlans');       // ✅ Service Planner
+const systemRequestRoutes = require('./routes/systemRequests');   // ✅ NEW: Client Requests (admin)
+const publicRequestRoutes = require('./routes/publicRequests');   // ✅ NEW: Client Requests (public)
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -35,7 +37,9 @@ app.use('/api/alerts', alertRoutes);
 app.use('/api/uptime', uptimeRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/service-plans', servicePlanRoutes); // ✅ NEW: Service Planner endpoints
+app.use('/api/service-plans', servicePlanRoutes);
+app.use('/api/system-requests', systemRequestRoutes);   // ✅ NEW: admin CRUD + actions
+app.use('/api/public', publicRequestRoutes);             // ✅ NEW: public submit endpoint
 
 // Health check
 app.get('/health', (req, res) => res.send('OK'));
