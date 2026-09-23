@@ -6,6 +6,7 @@ import { alertsPage } from './pages/alerts/alerts.js';
 import { showcasePage } from './pages/showcase/showcase.js';
 import { serviceRecordPage } from './pages/serviceRecord/serviceRecord.js';
 import { servicePlannerPage } from './pages/servicePlanner/servicePlanner.js';
+import { clientRequestsPage } from './pages/clientRequests/clientRequests.js';
 import { approveLoginPage } from './pages/approveLogin/approveLogin.js';
 import { initCustomSelects } from './components/customSelect.js';
 
@@ -18,6 +19,7 @@ const routes = {
   '#showcase': showcasePage,
   '#service-planner': servicePlannerPage,
   '#service-record': serviceRecordPage,
+  '#client-requests': clientRequestsPage,
   '#approve-login': approveLoginPage,
 };
 
