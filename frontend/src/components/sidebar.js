@@ -1,4 +1,5 @@
 import { authService } from '../services/authService.js';
+import { systemRequestService } from '../services/systemRequestService.js';
 
 export function renderSidebar() {
   return `
@@ -33,6 +34,13 @@ export function renderSidebar() {
 
       <a href="#service-record" class="nav-link" data-page="service-record">
         <i class="fas fa-history"></i> Service Record
+      </a>
+
+      <!-- Client Requests — NEW -->
+      <a href="#client-requests" class="nav-link" data-page="client-requests">
+        <i class="fas fa-inbox"></i>
+        <span>Client Requests</span>
+        <span class="nav-badge hidden" id="nav-requests-badge">0</span>
       </a>
 
       <!-- Finance Dropdown -->
@@ -105,6 +113,9 @@ export function initSidebar() {
     });
   }
 
+  // ==================== CLIENT REQUESTS BADGE ====================
+  loadClientRequestsBadge();
+
   // ==================== THEME TOGGLE ====================
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   if (themeToggleBtn) {
@@ -137,5 +148,34 @@ export function initSidebar() {
     logoutBtn.addEventListener('click', () => {
       authService.logout();
     });
+  }
+}
+
+// ==================== BADGE LOADER ====================
+/**
+ * Loads the count of new client requests and displays
+ * a badge next to the "Client Requests" nav link.
+ */
+async function loadClientRequestsBadge() {
+  const badge = document.getElementById('nav-requests-badge');
+  if (!badge) return;
+
+  // Don't attempt to fetch if user isn't authenticated
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  try {
+    const stats = await systemRequestService.getStats();
+    const newCount = stats.new_count || 0;
+
+    if (newCount > 0) {
+      badge.textContent = newCount > 99 ? '99+' : newCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  } catch (err) {
+    // Silent fail — badge just won't show
+    console.warn('Failed to load client requests badge:', err.message);
   }
 }
