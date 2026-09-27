@@ -1,3 +1,12 @@
+/**
+ * Project Form (Add/Edit)
+ * Renders the modern project form used inside a modal.
+ *
+ * Usage:
+ *   renderProjectForm()              -> empty form (create)
+ *   renderProjectForm(project)       -> prefilled form (edit)
+ */
+
 export function renderProjectForm(project = {}) {
   return `
     <div class="project-form-wrapper">
@@ -5,11 +14,11 @@ export function renderProjectForm(project = {}) {
       <!-- ==================== HEADER ==================== -->
       <div class="form-header-modern">
         <div class="form-header-icon">
-          <i class="fas fa-${project.id ? 'edit' : 'folder-plus'}"></i>
+          <i class="fas fa-${project.id ? 'pen' : 'folder-plus'}"></i>
         </div>
         <div class="form-header-text">
-          <h2>${project.id ? 'Edit Project' : 'Create New Project'}</h2>
-          <p>${project.id ? 'Update the details of your project' : 'Add a new project to your portfolio'}</p>
+          <h2>${project.id ? 'Edit Project' : 'New Project'}</h2>
+          <p>${project.id ? 'Update the details of this project' : 'Add a new project to your portfolio'}</p>
         </div>
       </div>
 
@@ -19,7 +28,7 @@ export function renderProjectForm(project = {}) {
         <!-- ==================== SECTION 1: BASIC INFORMATION ==================== -->
         <div class="form-section">
           <div class="form-section-header">
-            <span class="form-section-icon"><i class="fas fa-info-circle"></i></span>
+            <span class="form-section-icon"><i class="fas fa-circle-info"></i></span>
             <span class="form-section-title">Basic Information</span>
           </div>
 
@@ -299,12 +308,21 @@ export function renderProjectForm(project = {}) {
   `;
 }
 
-// ==================== HELPERS ====================
+/* ==================== HELPERS ==================== */
 function escapeAttr(str) {
-  return str ? str.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 function escapeHtml(str) {
-  return str ? str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 function formatDateInput(dateStr) {
   if (!dateStr) return '';
@@ -314,7 +332,7 @@ function formatDateInput(dateStr) {
   return dateStr;
 }
 
-// ==================== DATA ====================
+/* ==================== DATA ==================== */
 
 // Kenya counties
 const COUNTIES = [
@@ -339,53 +357,20 @@ const PROJECT_TYPES = [
 
 // Hosting providers
 const HOSTING_PROVIDERS = [
-  "Render",
-  "Vercel",
-  "Netlify",
-  "Railway",
-  "Fly.io",
-  "AWS",
-  "Google Cloud",
-  "Azure",
-  "DigitalOcean",
-  "Heroku",
-  "Cloudflare Pages",
-  "GitHub Pages",
-  "Hostinger",
-  "cPanel",
-  "Other"
+  "Render", "Vercel", "Netlify", "Railway", "Fly.io",
+  "AWS", "Google Cloud", "Azure", "DigitalOcean", "Heroku",
+  "Cloudflare Pages", "GitHub Pages", "Hostinger", "cPanel", "Other"
 ];
 
 // Database providers
 const DATABASE_PROVIDERS = [
-  "Supabase",
-  "Firebase",
-  "MongoDB Atlas",
-  "MongoDB",
-  "PostgreSQL",
-  "MySQL",
-  "MariaDB",
-  "SQLite",
-  "Redis",
-  "PlanetScale",
-  "Neon",
-  "Railway",
-  "AWS RDS",
-  "Azure SQL",
-  "Other"
+  "Supabase", "Firebase", "MongoDB Atlas", "MongoDB", "PostgreSQL",
+  "MySQL", "MariaDB", "SQLite", "Redis", "PlanetScale",
+  "Neon", "Railway", "AWS RDS", "Azure SQL", "Other"
 ];
 
 // Domain registrars
 const REGISTRARS = [
-  "Namecheap",
-  "GoDaddy",
-  "Cloudflare",
-  "Google Domains",
-  "Porkbun",
-  "Dynadot",
-  "NameSilo",
-  "Hover",
-  "Bluehost",
-  "Hostinger",
-  "Other"
+  "Namecheap", "GoDaddy", "Cloudflare", "Google Domains", "Porkbun",
+  "Dynadot", "NameSilo", "Hover", "Bluehost", "Hostinger", "Other"
 ];
