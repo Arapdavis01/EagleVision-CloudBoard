@@ -2,7 +2,8 @@
  * Projects Page
  * Professional portfolio management with stats bar, filter pills,
  * debounced search, client/location dropdowns, sort, grid/list toggle
- * (persisted), review flags, and empty states.
+ * (persisted), review flags, empty states, and a fully redesigned
+ * Quick View modal.
  */
 
 import { renderSidebar, initSidebar } from '../../components/sidebar.js';
@@ -83,6 +84,13 @@ function parseTech(tech) {
   return [];
 }
 
+function parseTags(tags) {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.filter(Boolean);
+  if (typeof tags === 'string') return tags.split(',').map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
 function formatDateTime(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
@@ -107,6 +115,37 @@ function formatDate(dateStr) {
   });
 }
 
+function getReviewFlag(nextReviewDate) {
+  if (!nextReviewDate) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const due = new Date(nextReviewDate);
+  if (isNaN(due.getTime())) return null;
+  due.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.floor((due - now) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    const n = Math.abs(diffDays);
+    return {
+      label: n === 1 ? 'Review overdue by 1 day' : `Review overdue by ${n} days`,
+      className: 'review-flag overdue',
+      icon: 'fa-exclamation-circle'
+    };
+  }
+  if (diffDays === 0) {
+    return { label: 'Review due today', className: 'review-flag due-soon', icon: 'fa-clock' };
+  }
+  if (diffDays <= 7) {
+    return {
+      label: diffDays === 1 ? 'Review due tomorrow' : `Review due in ${diffDays} days`,
+      className: 'review-flag due-soon',
+      icon: 'fa-clock'
+    };
+  }
+  return null;
+}
+
 function renderSkeletonCards(count = 6) {
   return Array.from({ length: count }).map(() => `
     <div class="card project-card skeleton-card">
@@ -116,6 +155,31 @@ function renderSkeletonCards(count = 6) {
       <div class="skeleton skeleton-badge"></div>
     </div>
   `).join('');
+}
+
+/* ============================================================
+   QUICK VIEW — DETAIL FIELD BUILDERS
+   ============================================================ */
+
+function detailField(label, value, icon) {
+  if (value === null || value === undefined || value === '') return '';
+  return `
+    <div class="detail-field">
+      <span class="detail-label"><i class="fas ${icon}"></i> ${label}</span>
+      <span class="detail-value">${value}</span>
+    </div>
+  `;
+}
+
+function detailLink(label, url, icon) {
+  if (!url) return '';
+  const safe = escapeHtml(url);
+  return `
+    <div class="detail-field">
+      <span class="detail-label"><i class="fas ${icon}"></i> ${label}</span>
+      <a class="detail-link" href="${safe}" target="_blank" rel="noopener">${safe}</a>
+    </div>
+  `;
 }
 
 /* ============================================================
@@ -476,7 +540,7 @@ export async function projectsPage() {
   }
 
   /* ============================================================
-     PROJECT ACTIONS
+     PROJECT ACTIONS (event delegation)
      ============================================================ */
   container.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -496,78 +560,248 @@ export async function projectsPage() {
   });
 
   /* ============================================================
-     QUICK VIEW MODAL
+     QUICK VIEW MODAL — Professional
      ============================================================ */
   function handleQuickView(projectId) {
     const project = allProjects.find(p => String(p.id) === String(projectId));
     if (!project) return showToast('Project not found', 'error');
 
+    const statusClass = (project.status || '').toLowerCase().replace(/\s+/g, '-');
     const techList = parseTech(project.tech_stack);
-    const techStack = techList.length ? techList.join(', ') : '—';
-    const tags = project.tags || '—';
-    const statusClass = (project.status || '').toLowerCase();
+    const tagList = parseTags(project.tags);
+    const reviewFlag = getReviewFlag(project.next_review_date);
+
+    const forSale =
+      project.for_sale === true ||
+      project.for_sale === 'true' ||
+      project.for_sale === 1;
+
+    const autoRenew =
+      project.auto_renew === true ||
+      project.auto_renew === 'true' ||
+      project.auto_renew === 1;
+
+    const hasDomain =
+      project.domain_name ||
+      project.registrar ||
+      project.expiry_date ||
+      autoRenew;
+
+    const techBadges = techList.length
+      ? `<div class="detail-badge-row">${techList.map(t => `<span class="tech-badge">${escapeHtml(t)}</span>`).join('')}</div>`
+      : '';
+
+    const tagBadges = tagList.length
+      ? `<div class="detail-badge-row">${tagList.map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')}</div>`
+      : '';
 
     const content = `
-      <div class="modal-header-bar">
-        <h2><i class="fas fa-circle-info"></i> ${escapeHtml(project.name)}</h2>
-        <span class="status ${statusClass}">${escapeHtml(project.status) || '—'}</span>
-      </div>
+      <div class="quick-view-modal">
 
-      <div class="quick-view-grid">
-        <div><strong>Client</strong> ${escapeHtml(project.client) || '—'}</div>
-        <div><strong>Client Number</strong> ${escapeHtml(project.client_number) || '—'}</div>
-        <div><strong>Client Email</strong> ${escapeHtml(project.client_email) || '—'}</div>
-        <div><strong>Project Type</strong> ${escapeHtml(project.project_type) || '—'}</div>
-        <div><strong>Location</strong> ${escapeHtml(project.location) || '—'}</div>
-        <div><strong>Hosting</strong> ${escapeHtml(project.hosting) || '—'}</div>
-        <div><strong>Database</strong> ${escapeHtml(project.database_host) || '—'}</div>
-        <div><strong>Domain</strong> ${escapeHtml(project.domain_name) || '—'}</div>
-        <div><strong>Registrar</strong> ${escapeHtml(project.registrar) || '—'}</div>
-        <div><strong>Domain Expiry</strong> ${formatDate(project.expiry_date)}</div>
-        <div><strong>Live URL</strong>
-          ${project.live_url
-            ? `<a href="${escapeHtml(project.live_url)}" target="_blank" rel="noopener">${escapeHtml(project.live_url)}</a>`
-            : '—'}
+        <!-- ============================================================
+             HERO HEADER
+             ============================================================ -->
+        <div class="quick-view-hero">
+          <div class="quick-view-hero-icon">
+            <i class="fas fa-folder-open"></i>
+          </div>
+          <div class="quick-view-hero-text">
+            <h2 class="quick-view-hero-title">${escapeHtml(project.name) || 'Untitled Project'}</h2>
+            <div class="quick-view-hero-meta">
+              ${project.client ? `<span><i class="fas fa-user"></i> ${escapeHtml(project.client)}</span>` : ''}
+              ${project.project_type ? `<span><i class="fas fa-cube"></i> ${escapeHtml(project.project_type)}</span>` : ''}
+              ${project.location ? `<span><i class="fas fa-map-marker-alt"></i> ${escapeHtml(project.location)}</span>` : ''}
+            </div>
+          </div>
+          <div class="quick-view-hero-badges">
+            ${forSale ? `<span class="badge-forsale"><i class="fas fa-tag"></i> For Sale</span>` : ''}
+            <span class="status ${statusClass}">${escapeHtml(project.status) || '—'}</span>
+          </div>
         </div>
-        <div><strong>GitHub</strong>
-          ${project.github
-            ? `<a href="${escapeHtml(project.github)}" target="_blank" rel="noopener">${escapeHtml(project.github)}</a>`
-            : '—'}
+
+        ${reviewFlag ? `
+          <div class="${reviewFlag.className} quick-view-review-flag">
+            <i class="fas ${reviewFlag.icon}"></i> ${escapeHtml(reviewFlag.label)}
+          </div>
+        ` : ''}
+
+        <!-- ============================================================
+             CLIENT
+             ============================================================ -->
+        ${(project.client || project.client_number || project.client_email) ? `
+          <div class="quick-view-section">
+            <div class="quick-view-section-header">
+              <span class="quick-view-section-icon"><i class="fas fa-address-card"></i></span>
+              <span class="quick-view-section-title">Client</span>
+            </div>
+            <div class="quick-view-fields">
+              ${detailField('Name', escapeHtml(project.client), 'fa-user')}
+              ${detailField('Phone', escapeHtml(project.client_number), 'fa-phone')}
+              ${detailLink(
+                'Email',
+                project.client_email ? `mailto:${escapeHtml(project.client_email)}` : '',
+                'fa-envelope'
+              )}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- ============================================================
+             DESCRIPTION
+             ============================================================ -->
+        ${project.description ? `
+          <div class="quick-view-section">
+            <div class="quick-view-section-header">
+              <span class="quick-view-section-icon"><i class="fas fa-align-left"></i></span>
+              <span class="quick-view-section-title">Description</span>
+            </div>
+            <p class="quick-view-description">${escapeHtml(project.description)}</p>
+          </div>
+        ` : ''}
+
+        <!-- ============================================================
+             LINKS & HOSTING
+             ============================================================ -->
+        ${(project.live_url || project.github || project.hosting || project.database_host) ? `
+          <div class="quick-view-section">
+            <div class="quick-view-section-header">
+              <span class="quick-view-section-icon"><i class="fas fa-link"></i></span>
+              <span class="quick-view-section-title">Links &amp; Hosting</span>
+            </div>
+            <div class="quick-view-fields">
+              ${detailLink('Live URL', project.live_url, 'fa-globe')}
+              ${detailLink('GitHub', project.github, 'fa-code-branch')}
+              ${detailField('Hosting', escapeHtml(project.hosting), 'fa-server')}
+              ${detailField('Database', escapeHtml(project.database_host), 'fa-database')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- ============================================================
+             DOMAIN
+             ============================================================ -->
+        ${hasDomain ? `
+          <div class="quick-view-section">
+            <div class="quick-view-section-header">
+              <span class="quick-view-section-icon"><i class="fas fa-globe"></i></span>
+              <span class="quick-view-section-title">Domain</span>
+            </div>
+            <div class="quick-view-fields">
+              ${detailField('Domain', escapeHtml(project.domain_name), 'fa-link')}
+              ${detailField('Registrar', escapeHtml(project.registrar), 'fa-building')}
+              ${detailField('Expiry', formatDate(project.expiry_date), 'fa-calendar-times')}
+              ${detailField(
+                'Auto-renew',
+                autoRenew
+                  ? '<span class="detail-pill detail-pill-success"><i class="fas fa-check"></i> Enabled</span>'
+                  : '<span class="detail-pill detail-pill-muted"><i class="fas fa-times"></i> Disabled</span>',
+                'fa-sync-alt'
+              )}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- ============================================================
+             TECHNICAL
+             ============================================================ -->
+        ${(techList.length || tagList.length) ? `
+          <div class="quick-view-section">
+            <div class="quick-view-section-header">
+              <span class="quick-view-section-icon"><i class="fas fa-code"></i></span>
+              <span class="quick-view-section-title">Technical</span>
+            </div>
+            ${techList.length ? `
+              <div class="detail-field detail-field-block">
+                <span class="detail-label"><i class="fas fa-layer-group"></i> Tech Stack</span>
+                ${techBadges}
+              </div>
+            ` : ''}
+            ${tagList.length ? `
+              <div class="detail-field detail-field-block">
+                <span class="detail-label"><i class="fas fa-hashtag"></i> Tags</span>
+                ${tagBadges}
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        <!-- ============================================================
+             TIMELINE
+             ============================================================ -->
+        <div class="quick-view-section">
+          <div class="quick-view-section-header">
+            <span class="quick-view-section-icon"><i class="fas fa-clock"></i></span>
+            <span class="quick-view-section-title">Timeline</span>
+          </div>
+          <div class="quick-view-fields">
+            ${detailField('Last Updated', formatDateTime(project.last_updated), 'fa-rotate')}
+            ${detailField('Next Review', formatDate(project.next_review_date), 'fa-calendar-check')}
+          </div>
         </div>
-        <div><strong>Tech Stack</strong> ${escapeHtml(techStack)}</div>
-        <div><strong>Tags</strong> ${escapeHtml(tags)}</div>
-        <div><strong>Last Updated</strong> ${formatDateTime(project.last_updated)}</div>
-        <div><strong>Next Review</strong> ${formatDate(project.next_review_date)}</div>
-      </div>
 
-      ${project.for_sale ? `
-        <div class="quick-view-forsale">
-          <i class="fas fa-tag"></i>
-          <strong>For Sale</strong>
-          ${project.asking_price ? `<span>Asking: $${Number(project.asking_price).toLocaleString()}</span>` : ''}
+        <!-- ============================================================
+             SALE (conditional)
+             ============================================================ -->
+        ${forSale ? `
+          <div class="quick-view-section quick-view-section-sale">
+            <div class="quick-view-section-header">
+              <span class="quick-view-section-icon"><i class="fas fa-tag"></i></span>
+              <span class="quick-view-section-title">Sale Details</span>
+            </div>
+            <div class="quick-view-fields">
+              ${detailField(
+                'Status',
+                '<span class="detail-pill detail-pill-gold"><i class="fas fa-tag"></i> For Sale</span>',
+                'fa-info-circle'
+              )}
+              ${detailField(
+                'Asking Price',
+                project.asking_price
+                  ? `<span class="detail-asking-price">$${Number(project.asking_price).toLocaleString()}</span>`
+                  : '—',
+                'fa-money-bill-wave'
+              )}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- ============================================================
+             FOOTER ACTIONS
+             ============================================================ -->
+        <div class="quick-view-actions">
+          <button type="button" class="btn btn-outline quick-view-action-service" data-id="${project.id}">
+            <i class="fas fa-history"></i> Service Record
+          </button>
+          <button type="button" class="btn btn-outline quick-view-action-copy" data-token="${escapeHtml(project.public_token || '')}" ${project.public_token ? '' : 'disabled'}>
+            <i class="fas fa-link"></i> Copy Link
+          </button>
+          <button type="button" class="btn btn-primary quick-view-action-edit" data-id="${project.id}">
+            <i class="fas fa-pen"></i> Edit Project
+          </button>
+          <button type="button" class="btn btn-ghost quick-view-action-close">
+            <i class="fas fa-times"></i> Close
+          </button>
         </div>
-      ` : ''}
 
-      <div class="form-group" style="margin-top:1.25rem;">
-        <strong style="display:block;margin-bottom:0.4rem;color:var(--primary);font-family:var(--font-display);font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;">Description</strong>
-        <p style="color:var(--text-secondary);line-height:1.6;">${escapeHtml(project.description) || 'No description provided.'}</p>
-      </div>
-
-      <div class="form-actions">
-        <button class="btn btn-outline service-record-from-modal" data-id="${project.id}">
-          <i class="fas fa-history"></i> Service Record
-        </button>
-        <button class="btn btn-outline" id="close-quick-view-btn">
-          <i class="fas fa-arrow-left"></i> Back
-        </button>
       </div>
     `;
 
     const { close } = showModal(content);
-    document.getElementById('close-quick-view-btn')?.addEventListener('click', close);
-    document.querySelector('.service-record-from-modal')?.addEventListener('click', () => {
+
+    document.querySelector('.quick-view-action-close')?.addEventListener('click', close);
+
+    document.querySelector('.quick-view-action-service')?.addEventListener('click', () => {
       close();
       location.hash = `#service-record?project_id=${project.id}`;
+    });
+
+    document.querySelector('.quick-view-action-copy')?.addEventListener('click', () => {
+      handleCopyLink(project.public_token);
+    });
+
+    document.querySelector('.quick-view-action-edit')?.addEventListener('click', () => {
+      close();
+      setTimeout(() => handleEdit(project.id), 150);
     });
   }
 
