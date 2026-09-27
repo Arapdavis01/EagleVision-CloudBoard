@@ -3545,6 +3545,329 @@ code, pre, kbd {
   }
 }
 /* ============================================================
+   14.19  QUICK VIEW MODAL — Professional
+   Multi-section project preview with hero header, grouped
+   detail fields, badge rows, and a sticky action footer.
+   ============================================================ */
+
+/* ---------- Modal wrapper ---------- */
+.quick-view-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ---------- Hero header ---------- */
+.quick-view-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-dim);
+  position: relative;
+}
+
+.quick-view-hero-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--primary), var(--cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-inverse);
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  box-shadow: var(--glow-mid);
+}
+
+.quick-view-hero-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.quick-view-hero-title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin: 0 0 0.4rem;
+  line-height: 1.2;
+}
+
+.quick-view-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.quick-view-hero-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.quick-view-hero-meta i {
+  color: var(--primary);
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+.quick-view-hero-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* ---------- Review flag inside modal ---------- */
+.quick-view-review-flag {
+  margin-top: -0.5rem;
+  align-self: flex-start;
+}
+
+/* ---------- Sections ---------- */
+.quick-view-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px dashed var(--border-dim);
+}
+
+.quick-view-section:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.quick-view-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.quick-view-section-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  border: 1px solid rgba(62, 224, 127, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.quick-view-section-title {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+/* ---------- Fields grid ---------- */
+.quick-view-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem 1.25rem;
+}
+
+.detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.detail-field-block {
+  grid-column: 1 / -1;
+}
+
+.detail-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.detail-label i {
+  color: var(--primary);
+  font-size: 0.7rem;
+  opacity: 0.9;
+}
+
+.detail-value {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.detail-link {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--primary);
+  text-decoration: none;
+  word-break: break-all;
+  transition: var(--transition-fast);
+}
+
+.detail-link:hover {
+  color: var(--cyan);
+}
+
+/* ---------- Inline pill values ---------- */
+.detail-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.detail-pill i {
+  font-size: 0.6rem;
+}
+
+.detail-pill-success {
+  background: rgba(62, 224, 127, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(62, 224, 127, 0.35);
+}
+
+.detail-pill-muted {
+  background: rgba(107, 115, 154, 0.15);
+  color: var(--text-muted);
+  border: 1px solid var(--border-dim);
+}
+
+.detail-pill-gold {
+  background: var(--gold-soft);
+  color: var(--gold);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+}
+
+/* ---------- Asking price display ---------- */
+.detail-asking-price {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: -0.01em;
+  text-shadow: 0 0 20px var(--gold-glow);
+}
+
+/* ---------- Badge rows (tech / tags) ---------- */
+.detail-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+/* ---------- Description block ---------- */
+.quick-view-description {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------- Sale section accent ---------- */
+.quick-view-section-sale {
+  padding: 1rem 1.1rem;
+  background: var(--gold-soft);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: var(--radius-md);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.25);
+}
+
+.quick-view-section-sale .quick-view-section-icon {
+  background: rgba(212, 175, 55, 0.15);
+  border-color: rgba(212, 175, 55, 0.3);
+  color: var(--gold);
+}
+
+/* ---------- Footer actions ---------- */
+.quick-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-dim);
+  margin-top: 0.5rem;
+}
+
+.quick-view-actions .btn {
+  min-width: 0;
+}
+
+.quick-view-action-copy:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 700px) {
+  .quick-view-hero {
+    flex-wrap: wrap;
+  }
+
+  .quick-view-hero-badges {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .quick-view-hero-title {
+    font-size: 1.1rem;
+  }
+
+  .quick-view-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-view-actions {
+    flex-direction: column-reverse;
+  }
+
+  .quick-view-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+/* ============================================================
    15. SERVICE PLANNER
    ============================================================ */
 .planner-toolbar {
