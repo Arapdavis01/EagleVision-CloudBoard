@@ -1,7 +1,8 @@
 /**
  * Projects Page
- * Professional rewrite with header, stats bar, filters, debounced search,
- * client/location dropdowns, sort, grid/list toggle (persisted), and empty states.
+ * Professional portfolio management with stats bar, filter pills,
+ * debounced search, client/location dropdowns, sort, grid/list toggle
+ * (persisted), review flags, and empty states.
  */
 
 import { renderSidebar, initSidebar } from '../../components/sidebar.js';
@@ -23,12 +24,12 @@ const SEARCH_DEBOUNCE_MS = 300;
 const STATUS_ORDER = ['Live', 'Development', 'Planning', 'Maintenance', 'Archived'];
 
 const STATS_DEFINITION = [
-  { key: 'all',         label: 'Total',       icon: 'fa-folder-open',   color: 'primary' },
-  { key: 'Live',        label: 'Live',        icon: 'fa-circle-check',  color: 'live' },
-  { key: 'Development', label: 'Development', icon: 'fa-code',          color: 'dev' },
-  { key: 'Planning',    label: 'Planning',    icon: 'fa-drafting-compass', color: 'planning' },
-  { key: 'Maintenance', label: 'Maintenance', icon: 'fa-wrench',        color: 'maintenance' },
-  { key: 'Archived',    label: 'Archived',    icon: 'fa-box-archive',   color: 'archived' }
+  { key: 'all',         label: 'Total',        icon: 'fa-folder-open',      color: 'primary' },
+  { key: 'Live',        label: 'Live',         icon: 'fa-circle-check',     color: 'live' },
+  { key: 'Development', label: 'Development',  icon: 'fa-code',             color: 'dev' },
+  { key: 'Planning',    label: 'Planning',     icon: 'fa-drafting-compass', color: 'planning' },
+  { key: 'Maintenance', label: 'Maintenance',  icon: 'fa-wrench',           color: 'maintenance' },
+  { key: 'Archived',    label: 'Archived',     icon: 'fa-box-archive',      color: 'archived' }
 ];
 
 /* ============================================================
@@ -63,9 +64,47 @@ function readStoredView() {
 }
 
 function storeView(view) {
-  try {
-    localStorage.setItem(VIEW_STORAGE_KEY, view);
-  } catch { /* ignore */ }
+  try { localStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }
+}
+
+function parseTech(tech) {
+  if (!tech) return [];
+  if (Array.isArray(tech)) return tech.filter(Boolean);
+  if (typeof tech === 'string') {
+    try {
+      const parsed = JSON.parse(tech);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      if (typeof parsed === 'string') return parsed.split(',').map(s => s.trim()).filter(Boolean);
+      return [];
+    } catch {
+      return tech.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function formatDateTime(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
 }
 
 function renderSkeletonCards(count = 6) {
@@ -110,12 +149,10 @@ export async function projectsPage() {
         <div class="projects-header-actions">
           <div class="view-toggle" role="group" aria-label="View mode">
             <button class="view-toggle-btn ${initialView === 'grid' ? 'active' : ''}" data-view="grid" title="Grid view" aria-label="Grid view">
-              <i class="fas fa-th-large"></i>
-              <span>Grid</span>
+              <i class="fas fa-th-large"></i><span>Grid</span>
             </button>
             <button class="view-toggle-btn ${initialView === 'list' ? 'active' : ''}" data-view="list" title="List view" aria-label="List view">
-              <i class="fas fa-list"></i>
-              <span>List</span>
+              <i class="fas fa-list"></i><span>List</span>
             </button>
           </div>
 
@@ -139,7 +176,7 @@ export async function projectsPage() {
       </div>
 
       <!-- ============================================================
-           TOOLBAR — Filter pills
+           FILTER PILLS
            ============================================================ -->
       <div class="filter-bar" id="status-filter-bar">
         <button class="filter-pill active" data-status="all">All</button>
@@ -149,7 +186,7 @@ export async function projectsPage() {
       </div>
 
       <!-- ============================================================
-           TOOLBAR — Search / Client / Location / Sort / Clear
+           TOOLBAR
            ============================================================ -->
       <div class="projects-toolbar">
         <div class="search-wrapper">
@@ -224,8 +261,8 @@ export async function projectsPage() {
   /* ============================================================
      STATE
      ============================================================ */
-  let allProjects = [];        // raw from server
-  let projects = [];           // after client/location filter + sort
+  let allProjects = [];
+  let projects = [];
   let currentView = initialView;
   let currentStatus = 'all';
   let currentClient = '';
@@ -239,31 +276,31 @@ export async function projectsPage() {
   const hash = location.hash.split('?')[1] || '';
   const params = new URLSearchParams(hash);
   const urlFilter = params.get('filter');
-  if (urlFilter === 'live')       currentStatus = 'Live';
-  else if (urlFilter === 'clients') currentStatus = 'all';
-  else if (urlFilter === 'revenue') { location.hash = '#finance'; return; }
+  if (urlFilter === 'live')          currentStatus = 'Live';
+  else if (urlFilter === 'clients')  currentStatus = 'all';
+  else if (urlFilter === 'revenue')  { location.hash = '#finance'; return; }
 
   /* ============================================================
      DOM REFS
      ============================================================ */
   const $ = (sel) => document.querySelector(sel);
 
-  const searchInput       = $('#search');
-  const clientFilter      = $('#client-filter');
-  const locationFilter    = $('#location-filter');
-  const sortSelect        = $('#sort-select');
-  const clearBtn          = $('#clear-filters-btn');
-  const container         = $('#projects-container');
-  const skeleton          = $('#loading-skeleton');
-  const emptyState        = $('#empty-state');
-  const emptyStateText    = $('#empty-state-text');
-  const emptyAddBtn       = $('#empty-add-btn');
-  const emptyClearBtn     = $('#empty-clear-btn');
-  const addProjectBtn     = $('#add-project-btn');
-  const statusFilterBar   = $('#status-filter-bar');
-  const statsBar          = $('#projects-stats-bar');
+  const searchInput     = $('#search');
+  const clientFilter    = $('#client-filter');
+  const locationFilter  = $('#location-filter');
+  const sortSelect      = $('#sort-select');
+  const clearBtn        = $('#clear-filters-btn');
+  const container       = $('#projects-container');
+  const skeleton        = $('#loading-skeleton');
+  const emptyState      = $('#empty-state');
+  const emptyStateText  = $('#empty-state-text');
+  const emptyAddBtn     = $('#empty-add-btn');
+  const emptyClearBtn   = $('#empty-clear-btn');
+  const addProjectBtn   = $('#add-project-btn');
+  const statusFilterBar = $('#status-filter-bar');
+  const statsBar        = $('#projects-stats-bar');
 
-  /* Sync UI from state on load */
+  // Sync UI with URL-driven state
   if (currentStatus !== 'all') {
     document.querySelectorAll('.filter-pill').forEach(p => {
       p.classList.toggle('active', p.dataset.status === currentStatus);
@@ -294,7 +331,7 @@ export async function projectsPage() {
   }
 
   /* ============================================================
-     DYNAMIC FILTERS (Client / Location)
+     DYNAMIC FILTERS
      ============================================================ */
   function populateDynamicFilters() {
     const clients = new Set();
@@ -307,7 +344,7 @@ export async function projectsPage() {
 
     const sortAlpha = (a, b) => a.localeCompare(b);
 
-    // Client filter
+    // Clients
     const clientOptions = ['<option value="">All Clients</option>'];
     [...clients].sort(sortAlpha).forEach(c => {
       clientOptions.push(`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`);
@@ -320,7 +357,7 @@ export async function projectsPage() {
       clientFilter.value = '';
     }
 
-    // Location filter
+    // Locations
     const locOptions = ['<option value="">All Locations</option>'];
     [...locations].sort(sortAlpha).forEach(l => {
       locOptions.push(`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`);
@@ -365,29 +402,21 @@ export async function projectsPage() {
   function applyFiltersAndRender() {
     let list = [...allProjects];
 
-    // Status
     if (currentStatus !== 'all') {
       list = list.filter(p => p.status === currentStatus);
     }
-
-    // Client
     if (currentClient) {
       list = list.filter(p => (p.client || '').trim() === currentClient);
     }
-
-    // Location
     if (currentLocation) {
       list = list.filter(p => (p.location || '').trim() === currentLocation);
     }
 
-    // Sort
     list.sort(getComparator(currentSort));
     projects = list;
 
-    // Update stats bar (always reflects full set)
     updateStatsBar();
 
-    // Update clear button visibility
     const hasFilters =
       currentStatus !== 'all' ||
       currentClient ||
@@ -395,7 +424,6 @@ export async function projectsPage() {
       (searchInput.value && searchInput.value.trim());
     clearBtn.classList.toggle('hidden', !hasFilters);
 
-    // Render or empty state
     if (list.length === 0) {
       renderEmptyState();
     } else {
@@ -412,13 +440,13 @@ export async function projectsPage() {
     };
 
     switch (sortKey) {
-      case 'name-asc':     return (a, b) => str(a.name).localeCompare(str(b.name));
-      case 'name-desc':    return (a, b) => str(b.name).localeCompare(str(a.name));
-      case 'client-asc':   return (a, b) => str(a.client).localeCompare(str(b.client));
-      case 'client-desc':  return (a, b) => str(b.client).localeCompare(str(a.client));
-      case 'updated-asc':  return (a, b) => date(a.last_updated) - date(b.last_updated);
+      case 'name-asc':    return (a, b) => str(a.name).localeCompare(str(b.name));
+      case 'name-desc':   return (a, b) => str(b.name).localeCompare(str(a.name));
+      case 'client-asc':  return (a, b) => str(a.client).localeCompare(str(b.client));
+      case 'client-desc': return (a, b) => str(b.client).localeCompare(str(a.client));
+      case 'updated-asc': return (a, b) => date(a.last_updated) - date(b.last_updated);
       case 'updated-desc':
-      default:             return (a, b) => date(b.last_updated) - date(a.last_updated);
+      default:            return (a, b) => date(b.last_updated) - date(a.last_updated);
     }
   }
 
@@ -448,7 +476,7 @@ export async function projectsPage() {
   }
 
   /* ============================================================
-     EVENT HANDLERS — PROJECT ACTIONS
+     PROJECT ACTIONS
      ============================================================ */
   container.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -487,7 +515,15 @@ export async function projectsPage() {
 
       <div class="quick-view-grid">
         <div><strong>Client</strong> ${escapeHtml(project.client) || '—'}</div>
+        <div><strong>Client Number</strong> ${escapeHtml(project.client_number) || '—'}</div>
+        <div><strong>Client Email</strong> ${escapeHtml(project.client_email) || '—'}</div>
+        <div><strong>Project Type</strong> ${escapeHtml(project.project_type) || '—'}</div>
         <div><strong>Location</strong> ${escapeHtml(project.location) || '—'}</div>
+        <div><strong>Hosting</strong> ${escapeHtml(project.hosting) || '—'}</div>
+        <div><strong>Database</strong> ${escapeHtml(project.database_host) || '—'}</div>
+        <div><strong>Domain</strong> ${escapeHtml(project.domain_name) || '—'}</div>
+        <div><strong>Registrar</strong> ${escapeHtml(project.registrar) || '—'}</div>
+        <div><strong>Domain Expiry</strong> ${formatDate(project.expiry_date)}</div>
         <div><strong>Live URL</strong>
           ${project.live_url
             ? `<a href="${escapeHtml(project.live_url)}" target="_blank" rel="noopener">${escapeHtml(project.live_url)}</a>`
@@ -498,16 +534,23 @@ export async function projectsPage() {
             ? `<a href="${escapeHtml(project.github)}" target="_blank" rel="noopener">${escapeHtml(project.github)}</a>`
             : '—'}
         </div>
-        <div><strong>Hosting</strong> ${escapeHtml(project.hosting) || '—'}</div>
         <div><strong>Tech Stack</strong> ${escapeHtml(techStack)}</div>
         <div><strong>Tags</strong> ${escapeHtml(tags)}</div>
-        <div><strong>Last Updated</strong> ${project.last_updated ? new Date(project.last_updated).toLocaleString() : '—'}</div>
-        <div><strong>Next Review</strong> ${project.next_review_date ? new Date(project.next_review_date).toLocaleDateString() : '—'}</div>
+        <div><strong>Last Updated</strong> ${formatDateTime(project.last_updated)}</div>
+        <div><strong>Next Review</strong> ${formatDate(project.next_review_date)}</div>
       </div>
 
-      <div class="form-group" style="margin-top:1rem;">
-        <strong style="display:block;margin-bottom:0.4rem;">Description</strong>
-        <p style="color:var(--text-secondary);">${escapeHtml(project.description) || 'No description provided.'}</p>
+      ${project.for_sale ? `
+        <div class="quick-view-forsale">
+          <i class="fas fa-tag"></i>
+          <strong>For Sale</strong>
+          ${project.asking_price ? `<span>Asking: $${Number(project.asking_price).toLocaleString()}</span>` : ''}
+        </div>
+      ` : ''}
+
+      <div class="form-group" style="margin-top:1.25rem;">
+        <strong style="display:block;margin-bottom:0.4rem;color:var(--primary);font-family:var(--font-display);font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;">Description</strong>
+        <p style="color:var(--text-secondary);line-height:1.6;">${escapeHtml(project.description) || 'No description provided.'}</p>
       </div>
 
       <div class="form-actions">
@@ -526,22 +569,6 @@ export async function projectsPage() {
       close();
       location.hash = `#service-record?project_id=${project.id}`;
     });
-  }
-
-  function parseTech(tech) {
-    if (!tech) return [];
-    if (Array.isArray(tech)) return tech.filter(Boolean);
-    if (typeof tech === 'string') {
-      try {
-        const parsed = JSON.parse(tech);
-        if (Array.isArray(parsed)) return parsed.filter(Boolean);
-        if (typeof parsed === 'string') return parsed.split(',').map(s => s.trim()).filter(Boolean);
-        return [];
-      } catch {
-        return tech.split(',').map(s => s.trim()).filter(Boolean);
-      }
-    }
-    return [];
   }
 
   /* ============================================================
@@ -663,10 +690,9 @@ export async function projectsPage() {
   }
 
   /* ============================================================
-     EVENT HANDLERS — CONTROLS
+     CONTROLS
      ============================================================ */
 
-  // Debounced search (server-side)
   const debouncedSearch = debounce((value) => {
     searchTerm = value.trim();
     loadProjects(searchTerm);
@@ -674,25 +700,21 @@ export async function projectsPage() {
 
   searchInput.addEventListener('input', (e) => debouncedSearch(e.target.value));
 
-  // Client filter
   clientFilter.addEventListener('change', (e) => {
     currentClient = e.target.value;
     applyFiltersAndRender();
   });
 
-  // Location filter
   locationFilter.addEventListener('change', (e) => {
     currentLocation = e.target.value;
     applyFiltersAndRender();
   });
 
-  // Sort
   sortSelect.addEventListener('change', (e) => {
     currentSort = e.target.value;
     applyFiltersAndRender();
   });
 
-  // Status filter pills
   statusFilterBar.addEventListener('click', (e) => {
     const pill = e.target.closest('.filter-pill');
     if (!pill) return;
@@ -702,7 +724,6 @@ export async function projectsPage() {
     applyFiltersAndRender();
   });
 
-  // Stats bar — clickable
   statsBar.addEventListener('click', (e) => {
     const card = e.target.closest('.projects-stat-card');
     if (!card) return;
@@ -710,7 +731,6 @@ export async function projectsPage() {
 
     currentStatus = stat;
 
-    // Sync filter pills
     statusFilterBar.querySelectorAll('.filter-pill').forEach(p => {
       p.classList.toggle('active', p.dataset.status === stat);
     });
@@ -718,7 +738,6 @@ export async function projectsPage() {
     applyFiltersAndRender();
   });
 
-  // View toggle
   document.querySelectorAll('.view-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const view = btn.dataset.view;
@@ -732,7 +751,6 @@ export async function projectsPage() {
     });
   });
 
-  // Clear filters
   function clearAllFilters() {
     currentStatus = 'all';
     currentClient = '';
@@ -749,7 +767,6 @@ export async function projectsPage() {
   clearBtn.addEventListener('click', clearAllFilters);
   emptyClearBtn.addEventListener('click', clearAllFilters);
 
-  // Add project
   addProjectBtn.addEventListener('click', handleCreate);
   emptyAddBtn.addEventListener('click', handleCreate);
 
