@@ -1,3 +1,9 @@
+/**
+ * Projects Page
+ * Professional rewrite with header, stats bar, filters, debounced search,
+ * client/location dropdowns, sort, grid/list toggle (persisted), and empty states.
+ */
+
 import { renderSidebar, initSidebar } from '../../components/sidebar.js';
 import { projectService } from '../../services/projectService.js';
 import { uploadImage } from '../../services/uploadService.js';
@@ -7,369 +13,748 @@ import { renderProjectForm } from '../../components/projectForm.js';
 import { showToast } from '../../utils/notifications.js';
 import { confirmDialog } from '../../utils/confirm.js';
 
+/* ============================================================
+   CONSTANTS
+   ============================================================ */
+
+const VIEW_STORAGE_KEY = 'ev_projects_view';
+const SEARCH_DEBOUNCE_MS = 300;
+
+const STATUS_ORDER = ['Live', 'Development', 'Planning', 'Maintenance', 'Archived'];
+
+const STATS_DEFINITION = [
+  { key: 'all',         label: 'Total',       icon: 'fa-folder-open',   color: 'primary' },
+  { key: 'Live',        label: 'Live',        icon: 'fa-circle-check',  color: 'live' },
+  { key: 'Development', label: 'Development', icon: 'fa-code',          color: 'dev' },
+  { key: 'Planning',    label: 'Planning',    icon: 'fa-drafting-compass', color: 'planning' },
+  { key: 'Maintenance', label: 'Maintenance', icon: 'fa-wrench',        color: 'maintenance' },
+  { key: 'Archived',    label: 'Archived',    icon: 'fa-box-archive',   color: 'archived' }
+];
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+function escapeHtml(text) {
+  if (text === null || text === undefined) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function debounce(fn, wait) {
+  let t;
+  return function debounced(...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
+
+function readStoredView() {
+  try {
+    const v = localStorage.getItem(VIEW_STORAGE_KEY);
+    return v === 'list' ? 'list' : 'grid';
+  } catch {
+    return 'grid';
+  }
+}
+
+function storeView(view) {
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch { /* ignore */ }
+}
+
+function renderSkeletonCards(count = 6) {
+  return Array.from({ length: count }).map(() => `
+    <div class="card project-card skeleton-card">
+      <div class="skeleton skeleton-title"></div>
+      <div class="skeleton skeleton-text"></div>
+      <div class="skeleton skeleton-text short"></div>
+      <div class="skeleton skeleton-badge"></div>
+    </div>
+  `).join('');
+}
+
+/* ============================================================
+   PAGE ENTRY
+   ============================================================ */
+
 export async function projectsPage() {
   document.body.classList.add('app-dashboard');
 
   const app = document.getElementById('app');
+  const initialView = readStoredView();
+
   app.innerHTML = `
     ${renderSidebar()}
+
     <div class="main-content">
-      <div class="projects-header">
-        <h2>Projects</h2>
-        <button id="add-project-btn" class="btn btn-primary"><i class="fas fa-plus"></i> Add Project</button>
+      <!-- ============================================================
+           HEADER
+           ============================================================ -->
+      <div class="projects-header-enhanced">
+        <div class="projects-header-text">
+          <div class="projects-header-title">
+            <div class="page-icon"><i class="fas fa-folder-open"></i></div>
+            <div>
+              <h2>Projects</h2>
+              <p class="page-subtitle">Manage your portfolio, monitor status, and track reviews</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="projects-header-actions">
+          <div class="view-toggle" role="group" aria-label="View mode">
+            <button class="view-toggle-btn ${initialView === 'grid' ? 'active' : ''}" data-view="grid" title="Grid view" aria-label="Grid view">
+              <i class="fas fa-th-large"></i>
+              <span>Grid</span>
+            </button>
+            <button class="view-toggle-btn ${initialView === 'list' ? 'active' : ''}" data-view="list" title="List view" aria-label="List view">
+              <i class="fas fa-list"></i>
+              <span>List</span>
+            </button>
+          </div>
+
+          <button id="add-project-btn" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Project
+          </button>
+        </div>
       </div>
 
-      <!-- Filter bar: status pills -->
-      <div class="filter-bar">
+      <!-- ============================================================
+           STATS BAR
+           ============================================================ -->
+      <div class="projects-stats-bar" id="projects-stats-bar">
+        ${STATS_DEFINITION.map(s => `
+          <button class="projects-stat-card stat-${s.color}" data-stat="${s.key}" type="button">
+            <span class="projects-stat-icon"><i class="fas ${s.icon}"></i></span>
+            <span class="projects-stat-value" data-stat-value="${s.key}">—</span>
+            <span class="projects-stat-label">${s.label}</span>
+          </button>
+        `).join('')}
+      </div>
+
+      <!-- ============================================================
+           TOOLBAR — Filter pills
+           ============================================================ -->
+      <div class="filter-bar" id="status-filter-bar">
         <button class="filter-pill active" data-status="all">All</button>
-        <button class="filter-pill" data-status="Planning">Planning</button>
-        <button class="filter-pill" data-status="Development">Development</button>
-        <button class="filter-pill" data-status="Live">Live</button>
-        <button class="filter-pill" data-status="Maintenance">Maintenance</button>
-        <button class="filter-pill" data-status="Archived">Archived</button>
+        ${STATUS_ORDER.map(s => `
+          <button class="filter-pill" data-status="${s}">${s}</button>
+        `).join('')}
       </div>
 
-      <!-- Toolbar: search, sort, view toggle -->
-      <div class="toolbar">
-        <input type="text" id="search" placeholder="Search by name, client, or tags...">
-        <select id="sort-select" class="sort-select">
+      <!-- ============================================================
+           TOOLBAR — Search / Client / Location / Sort / Clear
+           ============================================================ -->
+      <div class="projects-toolbar">
+        <div class="search-wrapper">
+          <i class="fas fa-search"></i>
+          <input
+            type="text"
+            id="search"
+            placeholder="Search by name, client, tech, or tags..."
+            autocomplete="off"
+          />
+        </div>
+
+        <select id="client-filter" class="filter-select" aria-label="Filter by client">
+          <option value="">All Clients</option>
+        </select>
+
+        <select id="location-filter" class="filter-select" aria-label="Filter by location">
+          <option value="">All Locations</option>
+        </select>
+
+        <select id="sort-select" class="filter-select" aria-label="Sort projects">
+          <option value="updated-desc">Newest First</option>
+          <option value="updated-asc">Oldest First</option>
           <option value="name-asc">Name A–Z</option>
           <option value="name-desc">Name Z–A</option>
           <option value="client-asc">Client A–Z</option>
           <option value="client-desc">Client Z–A</option>
-          <option value="updated-desc">Last Updated (newest)</option>
-          <option value="updated-asc">Last Updated (oldest)</option>
         </select>
-        <div class="view-toggle">
-          <button class="btn view-grid active" data-view="grid"><i class="fas fa-th-large"></i> Grid</button>
-          <button class="btn view-list" data-view="list"><i class="fas fa-list"></i> List</button>
-        </div>
+
+        <button id="clear-filters-btn" class="btn btn-ghost btn-sm hidden" type="button">
+          <i class="fas fa-times"></i> Clear
+        </button>
       </div>
 
-      <!-- Loading skeleton -->
+      <!-- ============================================================
+           LOADING SKELETON
+           ============================================================ -->
       <div id="loading-skeleton" class="projects-grid">
         ${renderSkeletonCards(6)}
       </div>
 
-      <!-- Projects container -->
+      <!-- ============================================================
+           PROJECTS CONTAINER
+           ============================================================ -->
       <div id="projects-container" class="projects-grid hidden"></div>
 
-      <!-- Empty state -->
-      <div id="empty-state" class="empty-state hidden">
-        <i class="fas fa-folder-open fa-3x"></i>
-        <p>No projects found.</p>
+      <!-- ============================================================
+           EMPTY STATE
+           ============================================================ -->
+      <div id="empty-state" class="projects-empty-state hidden">
+        <div class="projects-empty-icon">
+          <i class="fas fa-folder-open"></i>
+        </div>
+        <h3 class="projects-empty-title">No projects found</h3>
+        <p class="projects-empty-text" id="empty-state-text">
+          Try adjusting your filters, or add your first project to get started.
+        </p>
+        <div class="projects-empty-cta">
+          <button class="btn btn-primary" id="empty-add-btn">
+            <i class="fas fa-plus"></i> Add Project
+          </button>
+          <button class="btn btn-outline hidden" id="empty-clear-btn">
+            <i class="fas fa-times"></i> Clear Filters
+          </button>
+        </div>
       </div>
     </div>
   `;
 
   initSidebar();
 
-  const escapeHtml = (text) =>
-    text ? text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
-
-  // ✅ Robust parser: always returns an array
-  const parseTechStack = (tech) => {
-    if (!tech) return [];
-    if (Array.isArray(tech)) return tech;
-    if (typeof tech === 'string') {
-      try {
-        const parsed = JSON.parse(tech);
-        if (Array.isArray(parsed)) return parsed;
-        if (typeof parsed === 'string') return parsed.split(',').map(s => s.trim()).filter(Boolean);
-        return [];
-      } catch {
-        // Not valid JSON, assume comma-separated string
-        return tech.split(',').map(s => s.trim()).filter(Boolean);
-      }
-    }
-    return [];
-  };
-
-  // State
-  let currentView = 'grid';
-  let projects = [];
+  /* ============================================================
+     STATE
+     ============================================================ */
+  let allProjects = [];        // raw from server
+  let projects = [];           // after client/location filter + sort
+  let currentView = initialView;
   let currentStatus = 'all';
-  let currentSort = 'name-asc';
+  let currentClient = '';
+  let currentLocation = '';
+  let currentSort = 'updated-desc';
   let searchTerm = '';
 
-  // URL filter
+  /* ============================================================
+     URL PARAM PRE-FILTER
+     ============================================================ */
   const hash = location.hash.split('?')[1] || '';
   const params = new URLSearchParams(hash);
   const urlFilter = params.get('filter');
-  if (urlFilter === 'live') currentStatus = 'Live';
+  if (urlFilter === 'live')       currentStatus = 'Live';
   else if (urlFilter === 'clients') currentStatus = 'all';
   else if (urlFilter === 'revenue') { location.hash = '#finance'; return; }
 
-  // DOM elements
-  const searchInput = document.getElementById('search');
-  const sortSelect = document.getElementById('sort-select');
-  const container = document.getElementById('projects-container');
-  const skeleton = document.getElementById('loading-skeleton');
-  const emptyState = document.getElementById('empty-state');
-  const viewGridBtn = document.querySelector('.view-grid');
-  const viewListBtn = document.querySelector('.view-list');
-  const filterPills = document.querySelectorAll('.filter-pill');
+  /* ============================================================
+     DOM REFS
+     ============================================================ */
+  const $ = (sel) => document.querySelector(sel);
 
-  function renderSkeletonCards(count) {
-    return Array(count).fill().map(() => `
-      <div class="card skeleton-card">
-        <div class="skeleton skeleton-title"></div>
-        <div class="skeleton skeleton-text"></div>
-        <div class="skeleton skeleton-badge"></div>
-      </div>
-    `).join('');
+  const searchInput       = $('#search');
+  const clientFilter      = $('#client-filter');
+  const locationFilter    = $('#location-filter');
+  const sortSelect        = $('#sort-select');
+  const clearBtn          = $('#clear-filters-btn');
+  const container         = $('#projects-container');
+  const skeleton          = $('#loading-skeleton');
+  const emptyState        = $('#empty-state');
+  const emptyStateText    = $('#empty-state-text');
+  const emptyAddBtn       = $('#empty-add-btn');
+  const emptyClearBtn     = $('#empty-clear-btn');
+  const addProjectBtn     = $('#add-project-btn');
+  const statusFilterBar   = $('#status-filter-bar');
+  const statsBar          = $('#projects-stats-bar');
+
+  /* Sync UI from state on load */
+  if (currentStatus !== 'all') {
+    document.querySelectorAll('.filter-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.status === currentStatus);
+    });
   }
 
+  /* ============================================================
+     STATS BAR
+     ============================================================ */
+  function computeStats(list) {
+    const stats = { all: list.length };
+    STATUS_ORDER.forEach(s => { stats[s] = 0; });
+    list.forEach(p => {
+      if (p.status && stats[p.status] !== undefined) stats[p.status] += 1;
+    });
+    return stats;
+  }
+
+  function updateStatsBar() {
+    const stats = computeStats(allProjects);
+    statsBar.querySelectorAll('[data-stat-value]').forEach(el => {
+      const key = el.getAttribute('data-stat-value');
+      el.textContent = stats[key] ?? 0;
+    });
+    statsBar.querySelectorAll('.projects-stat-card').forEach(card => {
+      card.classList.toggle('active', card.dataset.stat === currentStatus);
+    });
+  }
+
+  /* ============================================================
+     DYNAMIC FILTERS (Client / Location)
+     ============================================================ */
+  function populateDynamicFilters() {
+    const clients = new Set();
+    const locations = new Set();
+
+    allProjects.forEach(p => {
+      if (p.client && p.client.trim()) clients.add(p.client.trim());
+      if (p.location && p.location.trim()) locations.add(p.location.trim());
+    });
+
+    const sortAlpha = (a, b) => a.localeCompare(b);
+
+    // Client filter
+    const clientOptions = ['<option value="">All Clients</option>'];
+    [...clients].sort(sortAlpha).forEach(c => {
+      clientOptions.push(`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`);
+    });
+    clientFilter.innerHTML = clientOptions.join('');
+    if (currentClient && [...clients].includes(currentClient)) {
+      clientFilter.value = currentClient;
+    } else {
+      currentClient = '';
+      clientFilter.value = '';
+    }
+
+    // Location filter
+    const locOptions = ['<option value="">All Locations</option>'];
+    [...locations].sort(sortAlpha).forEach(l => {
+      locOptions.push(`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`);
+    });
+    locationFilter.innerHTML = locOptions.join('');
+    if (currentLocation && [...locations].includes(currentLocation)) {
+      locationFilter.value = currentLocation;
+    } else {
+      currentLocation = '';
+      locationFilter.value = '';
+    }
+  }
+
+  /* ============================================================
+     LOADING
+     ============================================================ */
   async function loadProjects(search = '') {
     skeleton.classList.remove('hidden');
     container.classList.add('hidden');
     emptyState.classList.add('hidden');
 
     try {
-      projects = await projectService.getAll(search);
+      const result = await projectService.getAll(search);
+      allProjects = Array.isArray(result) ? result : [];
     } catch (err) {
       console.error('Failed to load projects:', err);
       showToast('Failed to load projects. Check connection.', 'error');
-      projects = [];
+      allProjects = [];
     }
 
-    if (currentStatus !== 'all') {
-      projects = projects.filter(p => p.status === currentStatus);
-    }
+    populateDynamicFilters();
+    updateStatsBar();
+    applyFiltersAndRender();
 
-    sortProjects();
-
-    if (projects.length === 0) {
-      emptyState.classList.remove('hidden');
-    } else {
-      emptyState.classList.add('hidden');
-    }
-
-    renderProjects();
     skeleton.classList.add('hidden');
     container.classList.remove('hidden');
   }
 
-  function sortProjects() {
-    projects.sort((a, b) => {
-      const nameA = (a.name || '').toLowerCase();
-      const nameB = (b.name || '').toLowerCase();
-      const clientA = (a.client || '').toLowerCase();
-      const clientB = (b.client || '').toLowerCase();
-      const updatedA = new Date(a.last_updated || 0);
-      const updatedB = new Date(b.last_updated || 0);
+  /* ============================================================
+     FILTER + SORT PIPELINE
+     ============================================================ */
+  function applyFiltersAndRender() {
+    let list = [...allProjects];
 
-      switch (currentSort) {
-        case 'name-asc': return nameA.localeCompare(nameB);
-        case 'name-desc': return nameB.localeCompare(nameA);
-        case 'client-asc': return clientA.localeCompare(clientB);
-        case 'client-desc': return clientB.localeCompare(clientA);
-        case 'updated-desc': return updatedB - updatedA;
-        case 'updated-asc': return updatedA - updatedB;
-        default: return 0;
-      }
-    });
+    // Status
+    if (currentStatus !== 'all') {
+      list = list.filter(p => p.status === currentStatus);
+    }
+
+    // Client
+    if (currentClient) {
+      list = list.filter(p => (p.client || '').trim() === currentClient);
+    }
+
+    // Location
+    if (currentLocation) {
+      list = list.filter(p => (p.location || '').trim() === currentLocation);
+    }
+
+    // Sort
+    list.sort(getComparator(currentSort));
+    projects = list;
+
+    // Update stats bar (always reflects full set)
+    updateStatsBar();
+
+    // Update clear button visibility
+    const hasFilters =
+      currentStatus !== 'all' ||
+      currentClient ||
+      currentLocation ||
+      (searchInput.value && searchInput.value.trim());
+    clearBtn.classList.toggle('hidden', !hasFilters);
+
+    // Render or empty state
+    if (list.length === 0) {
+      renderEmptyState();
+    } else {
+      emptyState.classList.add('hidden');
+      renderProjects();
+    }
   }
 
+  function getComparator(sortKey) {
+    const str = (v) => (v || '').toString().toLowerCase();
+    const date = (v) => {
+      const d = new Date(v || 0);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    };
+
+    switch (sortKey) {
+      case 'name-asc':     return (a, b) => str(a.name).localeCompare(str(b.name));
+      case 'name-desc':    return (a, b) => str(b.name).localeCompare(str(a.name));
+      case 'client-asc':   return (a, b) => str(a.client).localeCompare(str(b.client));
+      case 'client-desc':  return (a, b) => str(b.client).localeCompare(str(a.client));
+      case 'updated-asc':  return (a, b) => date(a.last_updated) - date(b.last_updated);
+      case 'updated-desc':
+      default:             return (a, b) => date(b.last_updated) - date(a.last_updated);
+    }
+  }
+
+  /* ============================================================
+     RENDER
+     ============================================================ */
   function renderProjects() {
     container.className = currentView === 'grid' ? 'projects-grid' : 'projects-list';
     container.innerHTML = projects.map(p => renderProjectCard(p, currentView)).join('');
+    container.classList.remove('hidden');
   }
 
-  // Event delegation for project actions
+  function renderEmptyState() {
+    const filtered =
+      currentStatus !== 'all' || currentClient || currentLocation ||
+      (searchInput.value && searchInput.value.trim());
+
+    emptyStateText.textContent = filtered
+      ? 'No projects match your current filters. Try adjusting them.'
+      : 'You have not added any projects yet. Start by creating your first one.';
+
+    emptyAddBtn.classList.toggle('hidden', filtered);
+    emptyClearBtn.classList.toggle('hidden', !filtered);
+
+    emptyState.classList.remove('hidden');
+    container.classList.add('hidden');
+  }
+
+  /* ============================================================
+     EVENT HANDLERS — PROJECT ACTIONS
+     ============================================================ */
   container.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
 
-    const projectId = btn.dataset.id;
-    if (!projectId) return;
-
     if (btn.classList.contains('edit-project')) {
-      handleEdit(projectId);
+      handleEdit(btn.dataset.id);
     } else if (btn.classList.contains('delete-project')) {
-      handleDelete(projectId);
+      handleDelete(btn.dataset.id);
     } else if (btn.classList.contains('copy-link')) {
       handleCopyLink(btn.dataset.token);
     } else if (btn.classList.contains('quick-view-project')) {
-      handleQuickView(projectId);
+      handleQuickView(btn.dataset.id);
     } else if (btn.classList.contains('service-record-project')) {
-      location.hash = `#service-record?project_id=${projectId}`;
+      location.hash = `#service-record?project_id=${btn.dataset.id}`;
     }
   });
 
+  /* ============================================================
+     QUICK VIEW MODAL
+     ============================================================ */
   function handleQuickView(projectId) {
-    const project = projects.find(p => p.id == projectId);
+    const project = allProjects.find(p => String(p.id) === String(projectId));
     if (!project) return showToast('Project not found', 'error');
 
-    const techList = parseTechStack(project.tech_stack);
+    const techList = parseTech(project.tech_stack);
     const techStack = techList.length ? techList.join(', ') : '—';
-    const tags = project.tags ? project.tags : '—';
+    const tags = project.tags || '—';
+    const statusClass = (project.status || '').toLowerCase();
+
     const content = `
       <div class="modal-header-bar">
-        <h2><i class="fas fa-info-circle"></i> ${escapeHtml(project.name)}</h2>
-        <span class="status ${(project.status || '').toLowerCase()}">${project.status || '—'}</span>
+        <h2><i class="fas fa-circle-info"></i> ${escapeHtml(project.name)}</h2>
+        <span class="status ${statusClass}">${escapeHtml(project.status) || '—'}</span>
       </div>
+
       <div class="quick-view-grid">
-        <div><strong>Client:</strong> ${escapeHtml(project.client) || '—'}</div>
-        <div><strong>Location:</strong> ${escapeHtml(project.location) || '—'}</div>
-        <div><strong>Live URL:</strong> <a href="${escapeHtml(project.live_url)}" target="_blank">${escapeHtml(project.live_url) || '—'}</a></div>
-        <div><strong>GitHub:</strong> <a href="${escapeHtml(project.github)}" target="_blank">${escapeHtml(project.github) || '—'}</a></div>
-        <div><strong>Hosting:</strong> ${escapeHtml(project.hosting) || '—'}</div>
-        <div><strong>Tech Stack:</strong> ${techStack}</div>
-        <div><strong>Tags:</strong> ${tags}</div>
-        <div><strong>Last Updated:</strong> ${project.last_updated ? new Date(project.last_updated).toLocaleString() : '—'}</div>
-        <div><strong>Next Review:</strong> ${project.next_review_date ? new Date(project.next_review_date).toLocaleDateString() : '—'}</div>
+        <div><strong>Client</strong> ${escapeHtml(project.client) || '—'}</div>
+        <div><strong>Location</strong> ${escapeHtml(project.location) || '—'}</div>
+        <div><strong>Live URL</strong>
+          ${project.live_url
+            ? `<a href="${escapeHtml(project.live_url)}" target="_blank" rel="noopener">${escapeHtml(project.live_url)}</a>`
+            : '—'}
+        </div>
+        <div><strong>GitHub</strong>
+          ${project.github
+            ? `<a href="${escapeHtml(project.github)}" target="_blank" rel="noopener">${escapeHtml(project.github)}</a>`
+            : '—'}
+        </div>
+        <div><strong>Hosting</strong> ${escapeHtml(project.hosting) || '—'}</div>
+        <div><strong>Tech Stack</strong> ${escapeHtml(techStack)}</div>
+        <div><strong>Tags</strong> ${escapeHtml(tags)}</div>
+        <div><strong>Last Updated</strong> ${project.last_updated ? new Date(project.last_updated).toLocaleString() : '—'}</div>
+        <div><strong>Next Review</strong> ${project.next_review_date ? new Date(project.next_review_date).toLocaleDateString() : '—'}</div>
       </div>
-      <div class="form-group">
-        <strong>Description:</strong>
-        <p>${escapeHtml(project.description) || 'No description.'}</p>
+
+      <div class="form-group" style="margin-top:1rem;">
+        <strong style="display:block;margin-bottom:0.4rem;">Description</strong>
+        <p style="color:var(--text-secondary);">${escapeHtml(project.description) || 'No description provided.'}</p>
       </div>
+
       <div class="form-actions">
         <button class="btn btn-outline service-record-from-modal" data-id="${project.id}">
           <i class="fas fa-history"></i> Service Record
         </button>
-        <button class="btn btn-outline" id="close-quick-view-btn"><i class="fas fa-arrow-left"></i> Back</button>
+        <button class="btn btn-outline" id="close-quick-view-btn">
+          <i class="fas fa-arrow-left"></i> Back
+        </button>
       </div>
     `;
+
     const { close } = showModal(content);
     document.getElementById('close-quick-view-btn')?.addEventListener('click', close);
     document.querySelector('.service-record-from-modal')?.addEventListener('click', () => {
       close();
-      location.hash = `#service-record?project_id=${projectId}`;
+      location.hash = `#service-record?project_id=${project.id}`;
     });
   }
 
+  function parseTech(tech) {
+    if (!tech) return [];
+    if (Array.isArray(tech)) return tech.filter(Boolean);
+    if (typeof tech === 'string') {
+      try {
+        const parsed = JSON.parse(tech);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        if (typeof parsed === 'string') return parsed.split(',').map(s => s.trim()).filter(Boolean);
+        return [];
+      } catch {
+        return tech.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  }
+
+  /* ============================================================
+     EDIT
+     ============================================================ */
   async function handleEdit(projectId) {
-    const project = projects.find(p => p.id == projectId);
+    const project = allProjects.find(p => String(p.id) === String(projectId));
     if (!project) return showToast('Project not found', 'error');
 
     const { close } = showModal(renderProjectForm(project));
     const form = document.getElementById('project-form');
     if (!form) return;
 
-    const cancelBtn = document.querySelector('.cancel-form-btn');
-    if (cancelBtn) cancelBtn.addEventListener('click', () => close());
+    document.querySelector('.cancel-form-btn')?.addEventListener('click', () => close());
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const fileInput = document.getElementById('project-thumbnail-file');
       const thumbnailUrlInput = document.getElementById('project-thumbnail');
+
       if (fileInput && fileInput.files.length > 0) {
         try {
           showToast('Uploading image...', 'info');
           const { url } = await uploadImage(fileInput.files[0]);
           thumbnailUrlInput.value = url;
         } catch (err) {
-          showToast(err.message, 'error');
+          showToast(err.message || 'Upload failed', 'error');
           return;
         }
       }
 
       const formData = new FormData(form);
       const data = Object.fromEntries(formData.entries());
+
       try {
         await projectService.update(projectId, data);
         close();
-        await loadProjects();
+        await loadProjects(searchInput.value);
         showToast('Project updated', 'success');
       } catch (err) {
-        showToast(err.message, 'error');
+        showToast(err.message || 'Update failed', 'error');
       }
     });
   }
 
-  async function handleDelete(projectId) {
-    const confirmed = await confirmDialog('Delete this project?', 'Confirm Deletion');
-    if (!confirmed) return;
-    try {
-      await projectService.delete(projectId);
-      await loadProjects();
-      showToast('Project deleted', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  }
-
-  function handleCopyLink(token) {
-    if (!token) {
-      showToast('No public link available', 'error');
-      return;
-    }
-    const link = `${window.location.origin}/#public-status?token=${token}`;
-    navigator.clipboard.writeText(link)
-      .then(() => showToast('Public link copied!', 'success'))
-      .catch(() => showToast('Failed to copy', 'error'));
-  }
-
-  // Add Project button
-  document.getElementById('add-project-btn').addEventListener('click', () => {
+  /* ============================================================
+     CREATE
+     ============================================================ */
+  function handleCreate() {
     const { close } = showModal(renderProjectForm());
     const form = document.getElementById('project-form');
     if (!form) return;
 
-    const cancelBtn = document.querySelector('.cancel-form-btn');
-    if (cancelBtn) cancelBtn.addEventListener('click', () => close());
+    document.querySelector('.cancel-form-btn')?.addEventListener('click', () => close());
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const fileInput = document.getElementById('project-thumbnail-file');
       const thumbnailUrlInput = document.getElementById('project-thumbnail');
+
       if (fileInput && fileInput.files.length > 0) {
         try {
           showToast('Uploading image...', 'info');
           const { url } = await uploadImage(fileInput.files[0]);
           thumbnailUrlInput.value = url;
         } catch (err) {
-          showToast(err.message, 'error');
+          showToast(err.message || 'Upload failed', 'error');
           return;
         }
       }
 
       const formData = new FormData(form);
       const data = Object.fromEntries(formData.entries());
+
       try {
         await projectService.create(data);
         close();
-        await loadProjects();
+        await loadProjects(searchInput.value);
         showToast('Project created', 'success');
       } catch (err) {
-        showToast(err.message, 'error');
+        showToast(err.message || 'Create failed', 'error');
       }
     });
+  }
+
+  /* ============================================================
+     DELETE
+     ============================================================ */
+  async function handleDelete(projectId) {
+    const confirmed = await confirmDialog(
+      'Delete this project? This action cannot be undone.',
+      'Confirm Deletion'
+    );
+    if (!confirmed) return;
+
+    try {
+      await projectService.delete(projectId);
+      await loadProjects(searchInput.value);
+      showToast('Project deleted', 'success');
+    } catch (err) {
+      showToast(err.message || 'Delete failed', 'error');
+    }
+  }
+
+  /* ============================================================
+     COPY LINK
+     ============================================================ */
+  function handleCopyLink(token) {
+    if (!token) {
+      showToast('No public link available for this project', 'error');
+      return;
+    }
+    const link = `${window.location.origin}/#public-status?token=${token}`;
+    navigator.clipboard.writeText(link)
+      .then(() => showToast('Public link copied', 'success'))
+      .catch(() => showToast('Failed to copy link', 'error'));
+  }
+
+  /* ============================================================
+     EVENT HANDLERS — CONTROLS
+     ============================================================ */
+
+  // Debounced search (server-side)
+  const debouncedSearch = debounce((value) => {
+    searchTerm = value.trim();
+    loadProjects(searchTerm);
+  }, SEARCH_DEBOUNCE_MS);
+
+  searchInput.addEventListener('input', (e) => debouncedSearch(e.target.value));
+
+  // Client filter
+  clientFilter.addEventListener('change', (e) => {
+    currentClient = e.target.value;
+    applyFiltersAndRender();
   });
 
-  searchInput.addEventListener('input', (e) => loadProjects(e.target.value));
+  // Location filter
+  locationFilter.addEventListener('change', (e) => {
+    currentLocation = e.target.value;
+    applyFiltersAndRender();
+  });
 
+  // Sort
   sortSelect.addEventListener('change', (e) => {
     currentSort = e.target.value;
-    sortProjects();
-    renderProjects();
+    applyFiltersAndRender();
   });
 
-  filterPills.forEach(pill => {
-    pill.addEventListener('click', () => {
-      filterPills.forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      currentStatus = pill.dataset.status;
-      loadProjects(searchInput.value);
+  // Status filter pills
+  statusFilterBar.addEventListener('click', (e) => {
+    const pill = e.target.closest('.filter-pill');
+    if (!pill) return;
+    statusFilterBar.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    currentStatus = pill.dataset.status;
+    applyFiltersAndRender();
+  });
+
+  // Stats bar — clickable
+  statsBar.addEventListener('click', (e) => {
+    const card = e.target.closest('.projects-stat-card');
+    if (!card) return;
+    const stat = card.dataset.stat;
+
+    currentStatus = stat;
+
+    // Sync filter pills
+    statusFilterBar.querySelectorAll('.filter-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.status === stat);
+    });
+
+    applyFiltersAndRender();
+  });
+
+  // View toggle
+  document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      if (view === currentView) return;
+      currentView = view;
+      storeView(view);
+      document.querySelectorAll('.view-toggle-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.view === view);
+      });
+      if (projects.length > 0) renderProjects();
     });
   });
 
-  viewGridBtn.addEventListener('click', () => {
-    currentView = 'grid';
-    viewGridBtn.classList.add('active');
-    viewListBtn.classList.remove('active');
-    renderProjects();
-  });
+  // Clear filters
+  function clearAllFilters() {
+    currentStatus = 'all';
+    currentClient = '';
+    currentLocation = '';
+    searchInput.value = '';
+    clientFilter.value = '';
+    locationFilter.value = '';
+    statusFilterBar.querySelectorAll('.filter-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.status === 'all');
+    });
+    loadProjects('');
+  }
 
-  viewListBtn.addEventListener('click', () => {
-    currentView = 'list';
-    viewListBtn.classList.add('active');
-    viewGridBtn.classList.remove('active');
-    renderProjects();
-  });
+  clearBtn.addEventListener('click', clearAllFilters);
+  emptyClearBtn.addEventListener('click', clearAllFilters);
 
-  loadProjects();
+  // Add project
+  addProjectBtn.addEventListener('click', handleCreate);
+  emptyAddBtn.addEventListener('click', handleCreate);
+
+  /* ============================================================
+     INITIAL LOAD
+     ============================================================ */
+  await loadProjects();
 }
