@@ -2,6 +2,9 @@
  * Project Card Renderer
  * Renders a project as either a grid card or a list row.
  * Backward-compatible signature: renderProjectCard(project, view = 'grid')
+ *
+ * Displays: status (with colored left border), title, client, location,
+ * last-updated date, tech stack, tags, review flag, and action buttons.
  */
 
 /* ============================================================
@@ -57,7 +60,7 @@ function formatDate(dateStr) {
 }
 
 /**
- * Returns { label, className } for review status based on next_review_date.
+ * Returns { label, className, icon } for review status based on next_review_date.
  * - overdue: past date
  * - due-soon: within 7 days
  * - null: no flag
@@ -75,17 +78,17 @@ function getReviewFlag(nextReviewDate) {
   if (diffDays < 0) {
     const overdueBy = Math.abs(diffDays);
     return {
-      label: overdueBy === 1 ? 'Review overdue 1d' : `Review overdue ${overdueBy}d`,
+      label: overdueBy === 1 ? 'Review overdue by 1 day' : `Review overdue by ${overdueBy} days`,
       className: 'review-flag overdue',
       icon: 'fa-exclamation-circle'
     };
   }
+  if (diffDays === 0) {
+    return { label: 'Review due today', className: 'review-flag due-soon', icon: 'fa-clock' };
+  }
   if (diffDays <= 7) {
-    if (diffDays === 0) {
-      return { label: 'Review today', className: 'review-flag due-soon', icon: 'fa-clock' };
-    }
     return {
-      label: diffDays === 1 ? 'Review tomorrow' : `Review in ${diffDays}d`,
+      label: diffDays === 1 ? 'Review due tomorrow' : `Review due in ${diffDays} days`,
       className: 'review-flag due-soon',
       icon: 'fa-clock'
     };
@@ -98,7 +101,7 @@ function getStatusClass(status) {
 }
 
 /* ============================================================
-   TECH & TAG BADGES
+   BADGES
    ============================================================ */
 
 function renderTechBadges(techList, max = 3) {
@@ -109,7 +112,7 @@ function renderTechBadges(techList, max = 3) {
     .map(t => `<span class="tech-badge">${escapeHtml(t)}</span>`)
     .join('');
   const more = hidden > 0
-    ? `<span class="tech-badge tech-badge-more">+${hidden}</span>`
+    ? `<span class="tech-badge tech-badge-more">+${hidden} more</span>`
     : '';
   return `<div class="project-tech">${badges}${more}</div>`;
 }
@@ -122,7 +125,7 @@ function renderTagBadges(tagList, max = 2) {
     .map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`)
     .join('');
   const more = hidden > 0
-    ? `<span class="tag-badge tag-badge-more">+${hidden}</span>`
+    ? `<span class="tag-badge tag-badge-more">+${hidden} more</span>`
     : '';
   return `<div class="project-tags">${badges}${more}</div>`;
 }
@@ -137,29 +140,27 @@ function renderActions(project, compact = false) {
   const copyTitle = token ? 'Copy public link' : 'No public link available';
 
   if (compact) {
-    // Icon-only action row (list view)
     return `
       <div class="project-actions compact">
         <button class="project-action-btn quick-view-project" data-id="${project.id}" title="Quick view" aria-label="Quick view">
           <i class="fas fa-eye"></i>
         </button>
-        <button class="project-action-btn edit-project" data-id="${project.id}" title="Edit" aria-label="Edit">
+        <button class="project-action-btn edit-project" data-id="${project.id}" title="Edit project" aria-label="Edit project">
           <i class="fas fa-pen"></i>
         </button>
         <button class="project-action-btn service-record-project" data-id="${project.id}" title="Service record" aria-label="Service record">
           <i class="fas fa-history"></i>
         </button>
-        <button class="project-action-btn copy-link" data-token="${escapeHtml(token)}" title="${copyTitle}" aria-label="Copy link" ${copyDisabled}>
+        <button class="project-action-btn copy-link" data-token="${escapeHtml(token)}" title="${copyTitle}" aria-label="Copy public link" ${copyDisabled}>
           <i class="fas fa-link"></i>
         </button>
-        <button class="project-action-btn danger delete-project" data-id="${project.id}" title="Delete" aria-label="Delete">
+        <button class="project-action-btn danger delete-project" data-id="${project.id}" title="Delete project" aria-label="Delete project">
           <i class="fas fa-trash"></i>
         </button>
       </div>
     `;
   }
 
-  // Full labelled actions (grid view)
   return `
     <div class="project-actions">
       <button class="btn btn-sm quick-view-project" data-id="${project.id}">
@@ -174,7 +175,7 @@ function renderActions(project, compact = false) {
       <button class="btn btn-sm copy-link" data-token="${escapeHtml(token)}" title="${copyTitle}" ${copyDisabled}>
         <i class="fas fa-link"></i>
       </button>
-      <button class="btn btn-sm btn-danger delete-project" data-id="${project.id}" title="Delete">
+      <button class="btn btn-sm btn-danger delete-project" data-id="${project.id}" title="Delete project">
         <i class="fas fa-trash"></i>
       </button>
     </div>
@@ -191,15 +192,23 @@ function renderGridCard(project) {
   const reviewFlag = getReviewFlag(project.next_review_date);
   const statusClass = getStatusClass(project.status);
   const updated = formatDate(project.last_updated);
+  const forSale = project.for_sale === true || project.for_sale === 'true' || project.for_sale === 1;
 
   return `
     <div class="card project-card status-${statusClass}" data-id="${project.id}">
       <div class="project-card-top">
         <div class="project-card-title-wrap">
           <h3 class="project-card-title">${escapeHtml(project.name) || 'Untitled Project'}</h3>
-          ${project.client ? `<p class="project-client"><i class="fas fa-user"></i> ${escapeHtml(project.client)}</p>` : ''}
+          ${project.client ? `
+            <p class="project-client">
+              <i class="fas fa-user"></i> ${escapeHtml(project.client)}
+            </p>
+          ` : ''}
         </div>
-        <span class="status ${statusClass}">${escapeHtml(project.status) || '—'}</span>
+        <div class="project-card-badges">
+          ${forSale ? `<span class="badge badge-forsale"><i class="fas fa-tag"></i> For Sale</span>` : ''}
+          <span class="status ${statusClass}">${escapeHtml(project.status) || '—'}</span>
+        </div>
       </div>
 
       ${reviewFlag ? `
@@ -212,6 +221,11 @@ function renderGridCard(project) {
         ${project.location ? `
           <span class="project-meta-item">
             <i class="fas fa-map-marker-alt"></i> ${escapeHtml(project.location)}
+          </span>
+        ` : ''}
+        ${project.project_type ? `
+          <span class="project-meta-item">
+            <i class="fas fa-cube"></i> ${escapeHtml(project.project_type)}
           </span>
         ` : ''}
         ${updated ? `
@@ -239,17 +253,27 @@ function renderListRow(project) {
   const statusClass = getStatusClass(project.status);
   const updated = formatDate(project.last_updated);
   const techSummary = techList.slice(0, 2).join(' · ');
+  const forSale = project.for_sale === true || project.for_sale === 'true' || project.for_sale === 1;
 
   return `
-    <div class="card project-list-row" data-id="${project.id}">
+    <div class="card project-list-row status-${statusClass}" data-id="${project.id}">
       <div class="list-row-content">
         <div class="list-primary">
-          <span class="list-name">${escapeHtml(project.name) || 'Untitled Project'}</span>
-          <span class="list-sub">
-            ${project.client ? `<span class="list-client"><i class="fas fa-user"></i> ${escapeHtml(project.client)}</span>` : ''}
-            ${project.location ? `<span class="list-location"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(project.location)}</span>` : ''}
-            ${techSummary ? `<span class="list-tech"><i class="fas fa-code"></i> ${escapeHtml(techSummary)}</span>` : ''}
-          </span>
+          <div class="list-name-row">
+            <span class="list-name">${escapeHtml(project.name) || 'Untitled Project'}</span>
+            ${forSale ? `<span class="badge badge-forsale compact"><i class="fas fa-tag"></i> For Sale</span>` : ''}
+          </div>
+          <div class="list-sub">
+            ${project.client ? `
+              <span class="list-client"><i class="fas fa-user"></i> ${escapeHtml(project.client)}</span>
+            ` : ''}
+            ${project.location ? `
+              <span class="list-location"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(project.location)}</span>
+            ` : ''}
+            ${techSummary ? `
+              <span class="list-tech"><i class="fas fa-code"></i> ${escapeHtml(techSummary)}</span>
+            ` : ''}
+          </div>
           ${reviewFlag ? `
             <div class="${reviewFlag.className} compact">
               <i class="fas ${reviewFlag.icon}"></i> ${escapeHtml(reviewFlag.label)}
@@ -259,7 +283,11 @@ function renderListRow(project) {
 
         <div class="list-meta">
           <span class="status ${statusClass}">${escapeHtml(project.status) || '—'}</span>
-          ${updated ? `<span class="list-updated"><i class="fas fa-clock"></i> ${escapeHtml(updated)}</span>` : ''}
+          ${updated ? `
+            <span class="list-updated">
+              <i class="fas fa-clock"></i> ${escapeHtml(updated)}
+            </span>
+          ` : ''}
         </div>
 
         ${renderActions(project, true)}
