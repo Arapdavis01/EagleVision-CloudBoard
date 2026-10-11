@@ -135,7 +135,7 @@ export function renderSalesChart(canvasId, chartData, options = {}) {
             label: (c) => {
               const usd = Number(c.raw) || 0;
               const kes = usd * exchangeRate;
-              return `${label}: ${format.currency(usd)} · ${format.currency(kes)}`;
+              return `${label}: ${format.usd(usd)} · ${format.kes(kes)}`;
             },
           },
         },
