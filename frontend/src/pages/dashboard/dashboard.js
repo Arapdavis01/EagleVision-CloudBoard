@@ -1,11 +1,11 @@
 // ============================================================
 // EAGLEVISION CLOUDBOARD — DASHBOARD PAGE
 // ============================================================
-// Fixes applied:
-//   • Revenue KPI shows $ (USD) instead of KSh
-//   • Pending Revenue card shows $ (USD)
-//   • Revenue summary modal shows $ (USD) for rows + total
-//   Requires utils/format.js to expose format.usd()
+// Layout: dense, 6-across KPI row, ambient background.
+//   • Pending Revenue is the 6th KPI tile (was a standalone card)
+//   • KPI tiles are keyboard-accessible (Enter/Space)
+//   • All modals share the same header pattern
+//   • Revenue + pending figures in USD (format.usd)
 // ============================================================
 
 import { renderSidebar, initSidebar } from '../../components/sidebar.js';
@@ -42,7 +42,6 @@ let lastUpdatedTimer = null;
 // PAGE ENTRY
 // ============================================================
 export async function dashboardPage() {
-  // Reset module state on each mount
   statusChart = null;
   expiringDomains = [];
 
@@ -72,13 +71,10 @@ export async function dashboardPage() {
         </div>
       </div>
 
-      <!-- KPI CARDS -->
+      <!-- KPI CARDS — 6 across (pending revenue is the 6th) -->
       <div id="kpi-container" class="kpi-grid">
         ${renderPlaceholderKPIs()}
       </div>
-
-      <!-- Pending revenue -->
-      <div id="pending-revenue-container"></div>
 
       <!-- ROW 1: Chart + Reviews -->
       <div class="dashboard-row chart-review-row">
@@ -153,18 +149,15 @@ export async function dashboardPage() {
   initSidebar();
   attachEventListeners();
 
-  // Initial load
   refreshDashboard();
   updateLastUpdatedTimestamp();
 
-  // Refresh timer
   if (lastUpdatedTimer) clearInterval(lastUpdatedTimer);
   lastUpdatedTimer = setInterval(() => {
     refreshDashboard();
     updateLastUpdatedTimestamp();
   }, 60000);
 
-  // Cleanup hook for the router
   registerCleanup(() => {
     if (lastUpdatedTimer) {
       clearInterval(lastUpdatedTimer);
@@ -182,21 +175,30 @@ export async function dashboardPage() {
 // EVENT LISTENERS
 // ============================================================
 function attachEventListeners() {
-  // KPI clicks — ignore placeholder cards
-  document.getElementById('kpi-container')?.addEventListener('click', (e) => {
-    const card = e.target.closest('.clickable');
-    if (!card) return;
-    if (card.dataset.loading === 'true') return;  // guard
+  // KPI clicks + keyboard activation
+  const kpiContainer = document.getElementById('kpi-container');
+  if (kpiContainer) {
+    const activate = (card) => {
+      if (!card || card.dataset.loading === 'true') return;
+      const type = card.dataset.kpiType;
+      if (!type) return;
+      openKpiModal(type, refreshDashboard);
+    };
 
-    const type = card.dataset.kpiType;
-    if (!type) return;
-    openKpiModal(type, refreshDashboard);
-  });
+    kpiContainer.addEventListener('click', (e) => {
+      activate(e.target.closest('.clickable'));
+    });
 
-  // Add Project
+    kpiContainer.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const card = e.target.closest('.clickable');
+      if (!card) return;
+      e.preventDefault();
+      activate(card);
+    });
+  }
+
   document.getElementById('add-project-btn')?.addEventListener('click', onAddProject);
-
-  // Record Sale
   document.getElementById('record-sale-btn')?.addEventListener('click', onRecordSale);
 }
 
@@ -205,7 +207,6 @@ function attachEventListeners() {
 // DATA LOADING
 // ============================================================
 async function refreshDashboard() {
-  // Fire all requests in parallel
   const promises = {
     kpis:            safe(dashboardService.getKPIs(), {}),
     pendingRevenue:  safe(dashboardService.getPendingRevenue(), { total_pending: 0 }),
@@ -220,22 +221,15 @@ async function refreshDashboard() {
     alerts:          safe(alertsService.getAll(), []),
   };
 
-  // KPIs + greeting
-  Promise.all([promises.kpis, promises.expiringDomains])
-    .then(([kpis, domains]) => {
+  // KPIs + greeting — 6 tiles rendered together
+  Promise.all([promises.kpis, promises.expiringDomains, promises.pendingRevenue])
+    .then(([kpis, domains, pending]) => {
       expiringDomains = domains;
       const kpiEl = document.getElementById('kpi-container');
-      if (kpiEl) kpiEl.innerHTML = renderClickableKPIs(kpis, domains.length);
+      if (kpiEl) kpiEl.innerHTML = renderClickableKPIs(kpis, domains.length, pending);
       updateGreetingSubtitle(kpis, domains.length);
     })
     .catch(devOnly('KPIs'));
-
-  // Pending revenue card
-  promises.pendingRevenue.then((pending) => {
-    const container = document.getElementById('pending-revenue-container');
-    if (!container) return;
-    container.innerHTML = renderPendingRevenueCard(pending);
-  });
 
   // Reviews + chart + county + for-sale
   const [upcoming, overdue, dist, counties, forSale] = await Promise.all([
@@ -271,53 +265,68 @@ async function refreshDashboard() {
 
 
 // ============================================================
-// KPI RENDERING
+// KPI RENDERING — 6 tiles, single source of truth
 // ============================================================
-function renderPlaceholderKPIs() {
-  const card = (type, icon, label) => `
-    <div class="card kpi-card clickable compact-kpi" data-kpi-type="${type}" data-loading="true">
-      <i class="fas ${icon} kpi-icon"></i>
-      <h3>${label}</h3>
-      <div class="value kpi-placeholder">—</div>
-    </div>
-  `;
-  return (
-    card('projects',  'fa-folder-open',       'Total Projects') +
-    card('overdue',   'fa-exclamation-circle', 'Overdue Reviews') +
-    card('clients',   'fa-users',              'Active Clients') +
-    card('domains',   'fa-globe',              'Domains Expiring') +
-    card('revenue',   'fa-dollar-sign',        'Total Revenue')
-  );
-}
+const KPI_DEFS = [
+  { type: 'projects', icon: 'fa-folder-open',        label: 'Total Projects'   },
+  { type: 'overdue',  icon: 'fa-exclamation-circle', label: 'Overdue Reviews'  },
+  { type: 'clients',  icon: 'fa-users',              label: 'Active Clients'   },
+  { type: 'domains',  icon: 'fa-globe',              label: 'Domains Expiring' },
+  { type: 'revenue',  icon: 'fa-dollar-sign',        label: 'Total Revenue'    },
+  { type: 'pending',  icon: 'fa-hand-holding-usd',   label: 'Pending Revenue'  },
+];
 
-function renderClickableKPIs(data = {}, domainsCount = 0) {
-  const card = (type, icon, label, value) => `
-    <div class="card kpi-card clickable compact-kpi" data-kpi-type="${type}">
-      <i class="fas ${icon} kpi-icon"></i>
-      <h3>${label}</h3>
-      <div class="value">${value}</div>
-    </div>
-  `;
-  return (
-    card('projects', 'fa-folder-open',        'Total Projects',    format.number(data.total_projects)) +
-    card('overdue',  'fa-exclamation-circle', 'Overdue Reviews',   format.number(data.overdue_reviews)) +
-    card('clients',  'fa-users',              'Active Clients',    format.number(data.active_clients)) +
-    card('domains',  'fa-globe',              'Domains Expiring',  format.number(domainsCount)) +
-    // FIX: USD — backend sends USD
-    card('revenue',  'fa-dollar-sign',        'Total Revenue',     format.usd(data.total_revenue))
-  );
-}
+function renderKpiCard({ type, icon, label, value, loading = false, hasValue = false }) {
+  const valueClass = loading ? 'value is-placeholder' : 'value';
+  const cardClass  = [
+    'card', 'kpi-card', 'compact-kpi',
+    loading ? 'is-loading' : 'clickable',
+  ].join(' ');
 
-function renderPendingRevenueCard(pending) {
-  const total = Number(pending?.total_pending) || 0;
-  if (total <= 0) return '';
+  const a11y = loading
+    ? 'data-loading="true" aria-busy="true"'
+    : 'role="button" tabindex="0"';
+
+  const valueAttr = hasValue ? 'data-has-value="true"' : '';
+
   return `
-    <div class="card kpi-card pending-revenue-card compact-kpi">
-      <i class="fas fa-hand-holding-usd kpi-icon"></i>
-      <h3>Pending Revenue</h3>
-      <div class="value">${format.usd(total)}</div>
+    <div class="${cardClass}"
+         data-kpi-type="${type}"
+         ${a11y}
+         ${valueAttr}>
+      <i class="fas ${icon} kpi-icon" aria-hidden="true"></i>
+      <h3>${label}</h3>
+      <div class="${valueClass}">${value}</div>
     </div>
   `;
+}
+
+function renderPlaceholderKPIs() {
+  return KPI_DEFS
+    .map((def) => renderKpiCard({ ...def, value: '—', loading: true }))
+    .join('');
+}
+
+function renderClickableKPIs(data = {}, domainsCount = 0, pending = {}) {
+  const pendingTotal = Number(pending?.total_pending) || 0;
+  const overdueCount = Number(data.overdue_reviews) || 0;
+
+  const values = {
+    projects: format.number(data.total_projects),
+    overdue:  format.number(data.overdue_reviews),
+    clients:  format.number(data.active_clients),
+    domains:  format.number(domainsCount),
+    revenue:  format.usd(data.total_revenue),
+    pending:  format.usd(pendingTotal),
+  };
+
+  return KPI_DEFS.map((def) =>
+    renderKpiCard({
+      ...def,
+      value: values[def.type] ?? '—',
+      hasValue: def.type === 'overdue' && overdueCount > 0,
+    })
+  ).join('');
 }
 
 
@@ -480,7 +489,7 @@ function renderUpcomingReviewsCompact(upcoming = []) {
 function renderCountyBreakdown(counties = []) {
   if (!counties || counties.length === 0) return '';
   return `
-    <h3 class="dashboard-widget-title" style="margin-bottom:0.8rem;border-bottom:1px solid var(--border-subtle);padding-bottom:0.6rem;">
+    <h3 class="dashboard-widget-title">
       <i class="fas fa-map-marker-alt"></i> Top Counties
     </h3>
     <ul class="compact-widget-list">
@@ -498,7 +507,7 @@ function renderCountyBreakdown(counties = []) {
 
 function renderForSaleProjectsCompact(forSale = []) {
   const header = `
-    <h3 class="dashboard-widget-title" style="margin-bottom:0.8rem;border-bottom:1px solid var(--border-subtle);padding-bottom:0.6rem;">
+    <h3 class="dashboard-widget-title">
       <i class="fas fa-tag"></i> For Sale
     </h3>
   `;
@@ -558,11 +567,11 @@ function renderStatusChart(distribution = []) {
         legend: {
           position: 'right',
           labels: {
-            padding: 10,
+            padding: 8,
             usePointStyle: true,
             boxWidth: 8,
             color: CHART_COLORS.text,
-            font: { family: "'Inter', sans-serif", size: 12 },
+            font: { family: "'Inter', sans-serif", size: 11 },
           },
         },
       },
@@ -645,6 +654,7 @@ async function openKpiModal(type, refreshCallback = null) {
     case 'clients':  await showClientsSummaryModal(); break;
     case 'revenue':  await showRevenueSummaryModal(); break;
     case 'domains':  await showExpiringDomainsModal(); break;
+    case 'pending':  await showPendingRevenueModal(); break;
   }
 }
 
@@ -836,6 +846,40 @@ async function showRevenueSummaryModal() {
         <tfoot>
           <tr>
             <td colspan="2" style="text-align:right;font-weight:700;">Total Revenue</td>
+            <td style="font-weight:700;">${format.usd(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `);
+}
+
+async function showPendingRevenueModal() {
+  let sales = [];
+  try { sales = await dashboardService.getPendingRevenueSummary(); } catch (_) {}
+  const total = sales.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+
+  showModal(`
+    <div class="modal-header-bar">
+      <h2><i class="fas fa-hand-holding-usd"></i> Pending Revenue</h2>
+      <span class="modal-count">${sales.length} pending · ${format.usd(total)}</span>
+    </div>
+    <div class="summary-table-wrapper">
+      <table class="summary-table">
+        <thead><tr><th>Project</th><th>Client</th><th>Amount</th><th>Due / Since</th></tr></thead>
+        <tbody>
+          ${sales.map((s) => `
+            <tr>
+              <td>${escapeHtml(s.project_name || '—')}</td>
+              <td>${escapeHtml(s.client || '—')}</td>
+              <td>${format.usd(s.amount)}</td>
+              <td>${format.date(s.sale_date || s.created_at, 'short')}</td>
+            </tr>
+          `).join('') || '<tr><td colspan="4">Nothing pending — all caught up 🎉</td></tr>'}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="text-align:right;font-weight:700;">Total Pending</td>
             <td style="font-weight:700;">${format.usd(total)}</td>
           </tr>
         </tfoot>
