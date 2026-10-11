@@ -5,7 +5,7 @@
 //
 // Features:
 //   • KPI cards for each section
-//   • Monthly trend chart
+//   • Monthly trend chart (per section)
 //   • Period filter pills (All / This month / Last month / This year)
 //   • Search + date-range filter
 //   • Sortable table columns
@@ -16,26 +16,34 @@
 //   • Exchange rate editor
 // ============================================================
 
-import { renderSidebar, initSidebar }  from '../../components/sidebar.js';
-import { financeService }              from '../../services/financeService.js';
-import { projectService }              from '../../services/projectService.js';
-import { dashboardService }            from '../../services/dashboardService.js';
-import { renderSalesChart }            from '../../components/salesChart.js';
-import { renderSaleForm }              from '../../components/saleForm.js';
-import { renderExpenseForm, renderMultipleExpenseForm } from '../../components/expenseForm.js';
-import { renderInvoicePreview }        from '../../components/invoicePreview.js';
-import { showModal }                   from '../../components/modal.js';
-import { showToast }                   from '../../utils/notifications.js';
-import { confirmDialog }               from '../../utils/confirm.js';
-import { escapeHtml }                  from '../../utils/dom.js';
-import { format }                      from '../../utils/format.js';
-import { registerCleanup }             from '../../utils/pageLifecycle.js';
+import { renderSidebar, initSidebar }    from '../../components/sidebar.js';
+import { financeService }                from '../../services/financeService.js';
+import { projectService }                from '../../services/projectService.js';
+import { dashboardService }              from '../../services/dashboardService.js';
+import {
+  renderSalesChart,
+  destroyAllSalesCharts,
+} from '../../components/salesChart.js';
+import { renderSaleForm }                from '../../components/saleForm.js';
+import {
+  renderExpenseForm,
+  renderMultipleExpenseForm,
+} from '../../components/expenseForm.js';
+import { renderInvoicePreview }          from '../../components/invoicePreview.js';
+import { showModal }                     from '../../components/modal.js';
+import { showToast }                     from '../../utils/notifications.js';
+import { confirmDialog }                 from '../../utils/confirm.js';
+import { escapeHtml }                    from '../../utils/dom.js';
+import { format }                        from '../../utils/format.js';
+import { registerCleanup }               from '../../utils/pageLifecycle.js';
+import { CHART_COLORS }                  from '../../config/constants.js';
 
 
 // ============================================================
 // MODULE STATE
 // ============================================================
 const PAGE_SIZE = 10;
+const DEFAULT_EXCHANGE_RATE = 129;
 
 
 // ============================================================
@@ -53,7 +61,7 @@ export async function financePage() {
         <h2 id="page-title">${activeSection === 'revenue' ? 'Revenue' : 'Expenses'}</h2>
         <div class="finance-actions">
           <span id="exchange-rate-badge" class="exchange-rate-badge">
-            <i class="fas fa-exchange-alt"></i> 1 USD = KSh <span id="rate-value">129</span>
+            <i class="fas fa-exchange-alt"></i> 1 USD = KSh <span id="rate-value">${DEFAULT_EXCHANGE_RATE}</span>
           </span>
           <button id="edit-rate-btn" class="btn btn-sm btn-outline" type="button" aria-label="Edit exchange rate">
             <i class="fas fa-edit"></i>
@@ -67,14 +75,18 @@ export async function financePage() {
 
   initSidebar();
 
+
   // ---------- STATE ----------
-  let exchangeRate = 129;
+  let exchangeRate = DEFAULT_EXCHANGE_RATE;
   let allProjects  = [];
+
 
   // ---------- HELPERS ----------
   function devOnly(label) {
     return (err) => {
-      if (import.meta?.env?.DEV) console.warn(`[finance] ${label}:`, err);
+      if (import.meta?.env?.DEV) {
+        console.warn(`[finance] ${label}:`, err);
+      }
     };
   }
 
@@ -92,7 +104,7 @@ export async function financePage() {
   async function loadExchangeRate() {
     try {
       const prefs = await dashboardService.getPreferences();
-      exchangeRate = Number(prefs?.exchange_rate) || 129;
+      exchangeRate = Number(prefs?.exchange_rate) || DEFAULT_EXCHANGE_RATE;
       updateRateBadge();
     } catch (err) {
       devOnly('exchange rate')(err);
@@ -138,6 +150,38 @@ export async function financePage() {
     if (fromInput) fromInput.value = from;
     if (toInput)   toInput.value   = to;
     refreshFn();
+  }
+
+
+  // ============================================================
+  // SHARED: Placeholder KPIs
+  // ============================================================
+  function renderPlaceholderKPIs(defs) {
+    return defs.map(([icon, label]) => `
+      <div class="card kpi-card compact-kpi">
+        <i class="fas ${icon} kpi-icon"></i>
+        <h3>${label}</h3>
+        <div class="value kpi-placeholder">—</div>
+      </div>
+    `).join('');
+  }
+
+
+  // ============================================================
+  // SHARED: CSV export
+  // ============================================================
+  function exportCSV(rows, filename) {
+    const csvContent = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
 
@@ -227,7 +271,7 @@ export async function financePage() {
 
     // ---------- DOM refs ----------
     const $ = (sel) => container.querySelector(sel);
-    const searchInput  = $('#revenue-search');
+    const searchInput   = $('#revenue-search');
     const dateFromInput = $('#revenue-date-from');
     const dateToInput   = $('#revenue-date-to');
     const clearBtn      = $('#clear-revenue-filters-btn');
@@ -254,7 +298,7 @@ export async function financePage() {
     }
 
     function updateRevenueKPIs(revenue) {
-      const totalRevenue    = revenue.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+      const totalRevenue = revenue.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
       const now = new Date();
       const thisMonthRevenue = revenue
         .filter((s) => {
@@ -297,7 +341,12 @@ export async function financePage() {
       });
       const sortedMonths = Object.keys(monthly).sort();
       const chartData = sortedMonths.map((m) => ({ month: m, total: monthly[m] }));
-      renderSalesChart('revenueChartCanvas', chartData, exchangeRate, 'Revenue (USD)');
+
+      renderSalesChart('revenueChartCanvas', chartData, {
+        exchangeRate,
+        label: 'Revenue',
+        color: CHART_COLORS.primary,
+      });
     }
 
     async function updateNetIncome(el) {
@@ -405,7 +454,7 @@ export async function financePage() {
       periodBar.querySelectorAll('.filter-pill').forEach((p) => p.classList.remove('active'));
       pill.classList.add('active');
 
-      applyPeriodFilter(pill.dataset.period, dateFromInput, dateToInput, applyFiltersAndSort);
+      applyPeriodFilter(pill.dataset.period, dateFromInput, dateToInput, () => {});
       dateFrom = dateFromInput.value;
       dateTo   = dateToInput.value;
       currentPage = 1;
@@ -696,7 +745,12 @@ export async function financePage() {
       });
       const sortedMonths = Object.keys(monthly).sort();
       const chartData = sortedMonths.map((m) => ({ month: m, total: monthly[m] }));
-      renderSalesChart('expenseChartCanvas', chartData, exchangeRate, 'Expenses (USD)');
+
+      renderSalesChart('expenseChartCanvas', chartData, {
+        exchangeRate,
+        label: 'Expenses',
+        color: CHART_COLORS.warning,
+      });
     }
 
     async function updateNetIncome(el) {
@@ -945,8 +999,8 @@ export async function financePage() {
     // Quick template buttons inside the modal
     modal.element.querySelectorAll('.quick-expense').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const category = btn.dataset.category;
-        const vendor   = btn.dataset.vendor;
+        const category  = btn.dataset.category;
+        const vendor    = btn.dataset.vendor;
         const amountKsh = parseFloat(btn.dataset.amount) || 0;
         const amountUsd = amountKsh / exchangeRate;
 
@@ -1059,7 +1113,7 @@ export async function financePage() {
       const toCreate = [];
 
       rows.forEach((row) => {
-        const idx     = row.dataset.index;
+        const idx      = row.dataset.index;
         const category = row.querySelector(`[name="category_${idx}"]`)?.value;
         const vendor   = row.querySelector(`[name="vendor_${idx}"]`)?.value;
         const amount   = parseFloat(row.querySelector(`[name="amount_${idx}"]`)?.value);
@@ -1095,38 +1149,6 @@ export async function financePage() {
     // Initial total
     updateTotal();
     document.querySelector('.cancel-multi-expense-btn')?.addEventListener('click', close);
-  }
-
-
-  // ============================================================
-  // SHARED: CSV export
-  // ============================================================
-  function exportCSV(rows, filename) {
-    const csvContent = rows
-      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-
-  // ============================================================
-  // SHARED: Placeholder KPIs
-  // ============================================================
-  function renderPlaceholderKPIs(defs) {
-    return defs.map(([icon, label]) => `
-      <div class="card kpi-card compact-kpi">
-        <i class="fas ${icon} kpi-icon"></i>
-        <h3>${label}</h3>
-        <div class="value kpi-placeholder">—</div>
-      </div>
-    `).join('');
   }
 
 
@@ -1192,6 +1214,9 @@ export async function financePage() {
   // CLEANUP
   // ============================================================
   registerCleanup(() => {
+    // Destroy chart instances BEFORE removing their canvases
+    destroyAllSalesCharts();
+
     // Clear the section container to detach all listeners
     const container = document.getElementById('finance-section-container');
     if (container) container.innerHTML = '';
