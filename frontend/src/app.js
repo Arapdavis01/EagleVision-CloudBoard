@@ -8,7 +8,7 @@
 //   4. Catches fatal errors and shows a fallback UI
 // ============================================================
 
-import { initRouter }     from './utils/router.js';
+import { initRouter }     from './router.js';
 import {
   API_BASE_URL,
   DEFAULT_THEME,
