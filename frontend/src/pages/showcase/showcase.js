@@ -8,6 +8,10 @@
 //   • Search + status filter + type filter + sort
 //   • Grid with lazy "Load More" (8 per page)
 //   • Detail modal with cost summary + print
+//
+// Currency convention:
+//   • Backend stores money in USD
+//   • format.usd() for the primary value, format.kes() for the converted
 // ============================================================
 
 import { renderSidebar, initSidebar }    from '../../components/sidebar.js';
@@ -25,8 +29,8 @@ import { registerCleanup }               from '../../utils/pageLifecycle.js';
 // ============================================================
 // CONSTANTS
 // ============================================================
-const PAGE_SIZE            = 8;
-const SEARCH_DEBOUNCE_MS   = 200;
+const PAGE_SIZE             = 8;
+const SEARCH_DEBOUNCE_MS    = 200;
 const DEFAULT_EXCHANGE_RATE = 129;
 
 
@@ -340,23 +344,23 @@ export async function showcasePage() {
       <div class="cost-summary-grid">
         <div>
           <strong>Total Expenses:</strong>
-          ${format.currency(totalExpenses)}
-          <small class="text-muted">(${format.currency(totalExpenses * exchangeRate)})</small>
+          ${format.usd(totalExpenses)}
+          <small class="text-muted">(${format.kes(totalExpenses * exchangeRate)})</small>
         </div>
         <div>
           <strong>Total Revenue:</strong>
-          ${format.currency(projectRevenue)}
-          <small class="text-muted">(${format.currency(projectRevenue * exchangeRate)})</small>
+          ${format.usd(projectRevenue)}
+          <small class="text-muted">(${format.kes(projectRevenue * exchangeRate)})</small>
         </div>
         <div>
           <strong>Net Profit:</strong>
-          ${format.currency(netProfit)}
-          <small class="text-muted">(${format.currency(netProfit * exchangeRate)})</small>
+          ${format.usd(netProfit)}
+          <small class="text-muted">(${format.kes(netProfit * exchangeRate)})</small>
         </div>
         <div>
           <strong>Asking Price:</strong>
-          ${format.currency(askingPrice)}
-          <small class="text-muted">(${format.currency(askingPrice * exchangeRate)})</small>
+          ${format.usd(askingPrice)}
+          <small class="text-muted">(${format.kes(askingPrice * exchangeRate)})</small>
         </div>
       </div>
 
@@ -420,12 +424,12 @@ export async function showcasePage() {
           <h1>${escapeHtml(project.name)}</h1>
           <p><strong>Client:</strong> ${escapeHtml(project.client) || '—'}</p>
           <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%;">
-            <tr><th>Metric</th><th>USD</th><th>KES (${exchangeRate})</th></tr>
+            <tr><th>Metric</th><th>USD</th><th>KES (${escapeHtml(exchangeRate)})</th></tr>
             ${rows.map(([label, amount]) => `
               <tr>
                 <td>${label}</td>
-                <td>${format.currency(amount)}</td>
-                <td>${format.currency(amount * exchangeRate)}</td>
+                <td>${format.usd(amount)}</td>
+                <td>${format.kes(amount * exchangeRate)}</td>
               </tr>
             `).join('')}
           </table>
@@ -493,8 +497,6 @@ export async function showcasePage() {
   // ============================================================
   registerCleanup(() => {
     grid.removeEventListener('click', onGridClick);
-    // Note: the search debounce closure isn't tracked here — it fires
-    // only on input and uses closures that will be GC'd with the page.
   });
 
 
