@@ -2,7 +2,7 @@
 // EAGLEVISION CLOUDBOARD — APP ENTRY POINT
 // ============================================================
 // Bootstraps the SPA:
-//   1. Applies the theme class to <body>
+//   1. Applies the theme (light/dark) via utils/theme.js
 //   2. Ensures storage schema version is current
 //   3. Warms up the backend (Render cold-start mitigation)
 //   4. Listens for global session-expired events
@@ -10,16 +10,14 @@
 //   6. Catches fatal errors and shows a fallback UI
 // ============================================================
 
-import { initRouter }   from './router.js';
-import { storage }      from './utils/storage.js';
+import { initRouter } from './router.js';
+import { storage }    from './utils/storage.js';
+import { theme }      from './utils/theme.js';
 import {
   API_BASE_URL,
   API_WARMUP_MS,
-  DEFAULT_THEME,
-  STORAGE_KEYS,
   APP_NAME,
   APP_VERSION,
-  AUTH,
   ROUTES,
 } from './config/constants.js';
 
@@ -27,37 +25,21 @@ import {
 // ============================================================
 // 01. THEME BOOTSTRAP
 // ============================================================
-// Applies `theme-light` or `theme-dark` to <body> before render.
-// Reads from storage; falls back to DEFAULT_THEME.
+// Delegated to utils/theme.js — the single source of truth
+// for light/dark mode. This applies the class to <body> before
+// the first paint and syncs the browser chrome meta tag.
 // ============================================================
 function applyTheme() {
-  let theme = DEFAULT_THEME;
-
-  try {
-    const stored = storage.getString(STORAGE_KEYS.THEME, '');
-    if (stored === 'light' || stored === 'dark') {
-      theme = stored;
-    }
-  } catch (_) {
-    // storage layer already swallows errors — this is just safety
-  }
-
-  document.body.classList.remove('theme-light', 'theme-dark');
-  document.body.classList.add(`theme-${theme}`);
-
-  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-  if (metaThemeColor) {
-    metaThemeColor.setAttribute('content', theme === 'dark' ? '#0B1220' : '#FFFFFF');
-  }
+  theme.init();
 }
 
 
 // ============================================================
 // 02. STORAGE SCHEMA VERSION
 // ============================================================
-// If the schema version has changed, this wipes stale keys
-// (token, user, theme, etc.) so users don't get confused by
-// old data. Cheap insurance against breaking updates.
+// If the schema version has changed, wipes stale keys so users
+// don't get confused by old data. Cheap insurance against
+// breaking updates.
 // ============================================================
 function ensureStorageVersion() {
   try {
@@ -104,7 +86,7 @@ function warmUpBackend() {
 // 04. SESSION-EXPIRED LISTENER
 // ============================================================
 // api.js emits 'ev:session-expired' when a 401 comes back.
-// Redirect to login (the router's auth guard will also fire,
+// Redirect to login (the router's auth guard would also fire,
 // but this makes the redirect instant).
 // ============================================================
 function listenForSessionExpired() {
@@ -121,6 +103,9 @@ function listenForSessionExpired() {
 
 // ============================================================
 // 05. FATAL ERROR FALLBACK
+// ============================================================
+// If the router fails to boot, show a friendly message instead
+// of a blank white screen.
 // ============================================================
 function renderFatalError(err) {
   console.error('[fatal]', err);
@@ -226,6 +211,10 @@ function boot() {
 
 // ============================================================
 // 07. RUN
+// ============================================================
+// <script type="module"> is deferred, so the DOM is already
+// parsed — but we still guard for safety in case this file is
+// ever loaded differently.
 // ============================================================
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', boot);
