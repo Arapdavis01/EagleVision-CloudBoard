@@ -7493,3 +7493,403 @@ textarea:focus-visible,
     page-break-inside: avoid;
   }
 }
+/* ============================================================
+   38. DASHBOARD — COOL & DENSE (overrides)
+   ============================================================
+   Design language:
+     • Compact, tool-like density (~40% less vertical air)
+     • 6-across KPI row on wide screens
+     • Ambient CSS mesh background (no image assets)
+     • Flat cards, hover = border-only (no lift)
+   Load order: must come AFTER all earlier sections.
+   ============================================================ */
+
+
+/* ------------------------------------------------------------
+   38.1  AMBIENT BACKGROUND — mesh + dot grid
+   ------------------------------------------------------------ */
+.main-content {
+  background-color: var(--bg-body);
+  background-image:
+    radial-gradient(circle at 12% 8%,  rgba(22, 163, 74, 0.055), transparent 42%),
+    radial-gradient(circle at 88% 92%, rgba(166, 124, 62, 0.045), transparent 42%),
+    radial-gradient(circle at 50% 50%, rgba(2, 132, 199, 0.030), transparent 55%),
+    radial-gradient(rgba(15, 23, 42, 0.032) 1px, transparent 1px);
+  background-size: auto, auto, auto, 22px 22px;
+  background-attachment: fixed, fixed, fixed, fixed;
+}
+
+/* Remove the old static gradient veil — now handled above */
+.main-content::before { display: none; }
+
+
+/* ------------------------------------------------------------
+   38.2  SHELL — tighter page padding
+   ------------------------------------------------------------ */
+.main-content           { padding: 1.25rem 1.5rem; }
+.compact-dashboard      { padding: 0; min-height: 100%; }
+body.page-dashboard .main-content { padding: 1.25rem 1.5rem; }
+
+
+/* ------------------------------------------------------------
+   38.3  HEADER — single tight row
+   ------------------------------------------------------------ */
+.dashboard-header-enhanced {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+}
+
+.dashboard-greeting { gap: 0.15rem; }
+
+.dashboard-greeting h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.dashboard-greeting-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  gap: 0.4rem;
+  line-height: 1.4;
+}
+
+.dashboard-last-updated {
+  font-size: 0.68rem;
+  margin-top: 0;
+  opacity: 0.75;
+}
+.dashboard-last-updated i { font-size: 0.65rem; }
+
+.quick-actions { gap: 0.5rem; flex-shrink: 0; }
+.quick-actions .btn {
+  padding: 0.5rem 0.95rem;
+  font-size: 0.72rem;
+}
+.quick-actions .btn i { font-size: 0.75rem; }
+
+
+/* ------------------------------------------------------------
+   38.4  KPI ROW — 6 across, dense
+   ------------------------------------------------------------ */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.kpi-card.compact-kpi {
+  padding: 0.7rem 0.75rem;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  text-align: left;
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.kpi-card.compact-kpi:hover {
+  border-color: var(--border-brand);
+  transform: none;                 /* kill the lift */
+  box-shadow: var(--shadow-xs);
+  background: var(--bg-card-hover);
+}
+
+.kpi-card.compact-kpi .kpi-icon {
+  font-size: 0.72rem;
+  margin-bottom: 0.15rem;
+  color: var(--primary);
+  opacity: 0.9;
+}
+
+.kpi-card.compact-kpi h3 {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpi-card.compact-kpi .value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-heading);
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.1rem;
+}
+
+/* Revenue + Pending — accent the value */
+.kpi-card.compact-kpi[data-kpi-type="revenue"] .value,
+.kpi-card.compact-kpi[data-kpi-type="pending"] .value {
+  color: var(--primary-dark);
+}
+
+/* Pending — gold accent to read as "action" */
+.kpi-card.compact-kpi[data-kpi-type="pending"] {
+  border-color: rgba(166, 124, 62, 0.28);
+  background: linear-gradient(180deg, rgba(166,124,62,0.035), rgba(166,124,62,0.0));
+}
+.kpi-card.compact-kpi[data-kpi-type="pending"] .kpi-icon { color: var(--gold-dark); }
+.kpi-card.compact-kpi[data-kpi-type="pending"] .value   { color: var(--gold-dark); }
+
+/* Overdue — red icon when there's a real value */
+.kpi-card.compact-kpi[data-kpi-type="overdue"][data-has-value="true"] .kpi-icon,
+.kpi-card.compact-kpi[data-kpi-type="overdue"][data-has-value="true"] .value {
+  color: var(--status-error);
+}
+
+/* Loading state — honest cursor */
+.kpi-card.compact-kpi.is-loading {
+  cursor: default;
+  opacity: 0.75;
+}
+.kpi-card.compact-kpi.is-loading:hover {
+  border-color: var(--border-subtle);
+  background: var(--bg-card);
+}
+.kpi-card.compact-kpi.is-loading .value {
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+}
+
+/* Keyboard focus ring (a11y) */
+.kpi-card.compact-kpi:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+
+/* ------------------------------------------------------------
+   38.5  CHART + WIDGET ROWS — tighter gaps
+   ------------------------------------------------------------ */
+.dashboard-row {
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.chart-review-row { grid-template-columns: 3fr 2fr; }
+
+.dashboard-widgets-grid {
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+
+/* ------------------------------------------------------------
+   38.6  CARDS — flatten + tighten (dashboard scope only)
+   ------------------------------------------------------------ */
+.compact-dashboard .card,
+.compact-dashboard .dashboard-widget {
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--transition-fast);
+}
+
+.compact-dashboard .card:hover,
+.compact-dashboard .dashboard-widget:hover {
+  transform: none;                    /* kill the lift */
+  border-color: var(--border-brand);
+  box-shadow: var(--shadow-xs);
+}
+
+.compact-dashboard .dashboard-widget::before { display: none; }  /* no top gradient reveal */
+
+
+/* ------------------------------------------------------------
+   38.7  WIDGET HEADERS — unified, thin
+   ------------------------------------------------------------ */
+.compact-dashboard .dashboard-widget-header {
+  padding-bottom: 0.55rem;
+  margin-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.compact-dashboard .dashboard-widget-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  gap: 0.35rem;
+}
+.compact-dashboard .dashboard-widget-title i { font-size: 0.75rem; }
+
+.compact-dashboard .dashboard-widget-count {
+  font-size: 0.6rem;
+  padding: 0.15rem 0.5rem;
+}
+
+/* Section-title pattern (County, For-Sale) — matches widget header */
+.compact-dashboard .compact-card > h3 {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-heading);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.55rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.compact-dashboard .compact-card > h3 i {
+  color: var(--primary);
+  font-size: 0.75rem;
+}
+
+
+/* ------------------------------------------------------------
+   38.8  CHART CARD — compact doughnut
+   ------------------------------------------------------------ */
+.compact-chart { padding: 0.85rem 0.95rem; }
+.compact-chart h3 {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.compact-chart h3 i { font-size: 0.75rem; }
+.compact-chart canvas { max-height: 200px; }
+
+
+/* ------------------------------------------------------------
+   38.9  WIDGET INTERNALS — tighten lists
+   ------------------------------------------------------------ */
+.requests-widget-list,
+.alerts-widget-list,
+.reviews-widget-list,
+.compact-widget-list { gap: 0.3rem; }
+
+.requests-widget-item,
+.alerts-widget-item,
+.reviews-widget-item,
+.compact-widget-item {
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-xs);
+}
+
+.requests-widget-icon,
+.alerts-widget-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 0.68rem;
+}
+
+.requests-widget-title,
+.alerts-widget-title,
+.reviews-widget-name,
+.compact-widget-label { font-size: 0.78rem; }
+
+.requests-widget-meta,
+.alerts-widget-meta,
+.reviews-widget-badge,
+.compact-widget-value { font-size: 0.68rem; }
+
+.reviews-widget-subtitle {
+  font-size: 0.62rem;
+  margin: 0.25rem 0 0.05rem;
+}
+
+.dashboard-empty { padding: 1rem 0.5rem; gap: 0.3rem; }
+.dashboard-empty-icon { font-size: 1.3rem; }
+.dashboard-empty-text { font-size: 0.75rem; }
+
+
+/* ------------------------------------------------------------
+   38.10  PENDING REVENUE — kill the standalone card
+   ------------------------------------------------------------
+   The card is now rendered as the 6th KPI tile by JS.
+   This container is kept in the DOM but empty — hide it.
+   ------------------------------------------------------------ */
+#pending-revenue-container { display: none; }
+
+
+/* ------------------------------------------------------------
+   38.11  RESPONSIVE — 6 → 3 → 2 → 1
+   ------------------------------------------------------------ */
+
+/* ≥1600px — comfortable 6-across */
+@media (min-width: 1600px) {
+  .kpi-grid { gap: 0.75rem; }
+  .kpi-card.compact-kpi .value { font-size: 1.25rem; }
+}
+
+/* 1200–1599px — still 6, tighter */
+@media (max-width: 1599px) {
+  .kpi-card.compact-kpi .value { font-size: 1.05rem; }
+  .kpi-card.compact-kpi h3      { font-size: 0.56rem; }
+}
+
+/* <1200px — drop to 3 columns */
+@media (max-width: 1199px) {
+  .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpi-card.compact-kpi .value { font-size: 1.2rem; }
+  .kpi-card.compact-kpi h3      { font-size: 0.62rem; }
+}
+
+/* <900px — 3 columns still, chart/reviews stack */
+@media (max-width: 899px) {
+  .chart-review-row          { grid-template-columns: 1fr; }
+  .dashboard-widgets-grid    { grid-template-columns: 1fr; }
+  .dashboard-row             { grid-template-columns: 1fr; }
+}
+
+/* <700px — 2 columns, header stacks */
+@media (max-width: 699px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .dashboard-header-enhanced {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+  .quick-actions { justify-content: stretch; }
+  .quick-actions .btn { flex: 1; justify-content: center; }
+}
+
+/* <480px — 2 columns, smaller values */
+@media (max-width: 479px) {
+  .main-content,
+  body.page-dashboard .main-content { padding: 0.85rem; }
+
+  .kpi-grid { gap: 0.45rem; }
+
+  .kpi-card.compact-kpi { padding: 0.6rem 0.6rem; }
+  .kpi-card.compact-kpi .value { font-size: 1rem; }
+  .kpi-card.compact-kpi h3      { font-size: 0.55rem; letter-spacing: 0.05em; }
+  .kpi-card.compact-kpi .kpi-icon { font-size: 0.68rem; }
+}
+
+/* Reduced motion — no transitions on hover already; safe */
+@media (prefers-reduced-motion: reduce) {
+  .kpi-card.compact-kpi,
+  .compact-dashboard .card,
+  .compact-dashboard .dashboard-widget { transition: none; }
+}
