@@ -13,6 +13,10 @@
 //   • Search + type filter + date range
 //   • Print support
 //   • Add / edit / delete service updates
+//
+// Currency convention:
+//   • Backend stores service-update costs in USD
+//   • format.usd() for all cost displays
 // ============================================================
 
 import { renderSidebar, initSidebar }        from '../../components/sidebar.js';
@@ -282,13 +286,10 @@ export async function serviceRecordPage() {
       if (analytics?.monthly?.labels?.length > 0) {
         costChartContainer.classList.remove('hidden');
 
-        // Destroy any previous chart before creating a new one
         destroyChart();
 
-        // Small delay lets the canvas size settle after the container unhides
         clearTimeout(chartRenderTimer);
         chartRenderTimer = setTimeout(() => {
-          // Guard against navigation mid-delay
           if (!document.getElementById('costChartCanvas')) return;
 
           costChartInstance = renderCostChart('costChartCanvas', {
@@ -343,8 +344,9 @@ export async function serviceRecordPage() {
 
     document.getElementById('kpi-total-updates').textContent = format.number(totalUpdates);
     document.getElementById('kpi-last-update').textContent   = lastUpdateDate;
-    document.getElementById('kpi-total-cost').textContent    = format.currency(totalCost);
-    document.getElementById('kpi-avg-cost').textContent      = format.currency(avgCost);
+    // FIX: USD — service-update costs are stored in USD
+    document.getElementById('kpi-total-cost').textContent    = format.usd(totalCost);
+    document.getElementById('kpi-avg-cost').textContent      = format.usd(avgCost);
   }
 
 
@@ -466,8 +468,9 @@ export async function serviceRecordPage() {
           <tbody>
             ${items.map((u) => {
               const { icon, cls } = getUpdateTypeVisual(u.update_type);
+              // FIX: USD
               const costCell = u.cost
-                ? format.currency(u.cost)
+                ? format.usd(u.cost)
                 : '—';
               return `
                 <tr data-id="${escapeAttr(u.id)}">
@@ -501,8 +504,9 @@ export async function serviceRecordPage() {
       <div class="timeline-container">
         ${items.map((u) => {
           const { icon, cls } = getUpdateTypeVisual(u.update_type);
+          // FIX: USD
           const costPart = u.cost
-            ? `<span><i class="fas fa-dollar-sign"></i> ${format.currency(u.cost)}</span>`
+            ? `<span><i class="fas fa-dollar-sign"></i> ${format.usd(u.cost)}</span>`
             : '';
 
           return `
@@ -661,7 +665,7 @@ export async function serviceRecordPage() {
                 <td>${escapeHtml(u.update_type)}</td>
                 <td>${escapeHtml(u.title)}</td>
                 <td>${escapeHtml(u.description || '')}</td>
-                <td>${u.cost ? format.currency(u.cost) : '—'}</td>
+                <td>${u.cost ? format.usd(u.cost) : '—'}</td>
                 <td>${format.date(u.created_at)}</td>
                 <td>${u.plan_id ? `Plan #${escapeHtml(u.plan_id)}` : '—'}</td>
               </tr>
@@ -788,11 +792,11 @@ export async function serviceRecordPage() {
   // CLEANUP
   // ============================================================
   registerCleanup(() => {
-  clearTimeout(chartRenderTimer);
-  chartRenderTimer = null;
-  destroyAllCostCharts();   // ← handles the internal map
-  updatesContainer.removeEventListener('click', onUpdatesContainerClick);
-});
+    clearTimeout(chartRenderTimer);
+    chartRenderTimer = null;
+    destroyAllCostCharts();   // handles the internal map
+    updatesContainer.removeEventListener('click', onUpdatesContainerClick);
+  });
 
   // ============================================================
   // INIT
