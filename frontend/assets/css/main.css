@@ -6784,7 +6784,131 @@ body.page-dashboard .main-content {
   .public-status-footer { padding: 1rem 1.5rem; }
   .public-status-header h1 { font-size: 1.2rem; }
 }
+/* ============================================================
+   33f. INVOICE PREVIEW
+   ============================================================ */
+.invoice-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
 
+.invoice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--primary);
+  flex-wrap: wrap;
+}
+
+.invoice-header h2 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-heading);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.invoice-header h2 i {
+  color: var(--primary);
+}
+
+.invoice-ref {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-pill);
+}
+
+.invoice-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.invoice-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.invoice-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.invoice-row-block {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.invoice-row dt {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.invoice-row dd {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-word;
+}
+
+.invoice-row-block dd {
+  text-align: left;
+  margin-top: 0.3rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.invoice-amount {
+  font-family: var(--font-display);
+  font-size: 1.15rem !important;
+  font-weight: 700 !important;
+  color: var(--primary-dark) !important;
+  letter-spacing: -0.02em;
+}
+
+.invoice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media print {
+  .invoice-actions { display: none !important; }
+}
 
 /* ============================================================
    34. RESPONSIVE BREAKPOINTS
