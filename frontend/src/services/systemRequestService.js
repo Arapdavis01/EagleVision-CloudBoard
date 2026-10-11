@@ -1,75 +1,123 @@
+// ============================================================
+// EAGLEVISION CLOUDBOARD — SYSTEM REQUEST SERVICE
+// ============================================================
+// Handles both admin (authed) and public (no-auth) endpoints.
+//
+// Admin endpoints (Bearer token required):
+//   GET    /api/system-requests
+//   GET    /api/system-requests/:id
+//   GET    /api/system-requests/stats
+//   PUT    /api/system-requests/:id
+//   POST   /api/system-requests/:id/approve
+//   POST   /api/system-requests/:id/reject
+//   POST   /api/system-requests/:id/convert
+//   DELETE /api/system-requests/:id
+//
+// Public endpoint (no auth):
+//   POST   /api/public/system-requests
+// ============================================================
+
 import { api } from './api.js';
 
-export const systemRequestService = {
-  // ==================== ADMIN METHODS ====================
 
-  // Get all requests with optional filters
+// ============================================================
+// INTERNAL HELPERS
+// ============================================================
+function segment(value, label = 'id') {
+  if (value === null || value === undefined || value === '') {
+    throw new Error(`[systemRequestService] Missing ${label}`);
+  }
+  return encodeURIComponent(String(value));
+}
+
+
+// ============================================================
+// PUBLIC API
+// ============================================================
+export const systemRequestService = {
+
+  // ----------------------------------------------------------
+  // Admin — read
+  // ----------------------------------------------------------
+
+  /**
+   * GET /api/system-requests
+   * @param {object} [filters]
+   * @param {string} [filters.status]      'new' | 'reviewing' | 'approved' | 'rejected' | 'converted' | 'all'
+   * @param {string} [filters.priority]    'high' | 'medium' | 'low' | 'all'
+   * @param {string} [filters.search]      Free text
+   * @param {string} [filters.sort]        'newest' | 'oldest' | 'priority'
+   * @param {string} [filters.project_id]  Filter by linked project
+   */
   getRequests: (filters = {}) => {
     const params = new URLSearchParams();
-    if (filters.status && filters.status !== 'all') params.append('status', filters.status);
-    if (filters.priority && filters.priority !== 'all') params.append('priority', filters.priority);
-    if (filters.search) params.append('search', filters.search);
-    if (filters.sort) params.append('sort', filters.sort);
-    if (filters.project_id) params.append('project_id', filters.project_id);
+
+    if (filters.status   && filters.status   !== 'all') params.append('status',     filters.status);
+    if (filters.priority && filters.priority !== 'all') params.append('priority',   filters.priority);
+    if (filters.search)                                 params.append('search',     filters.search);
+    if (filters.sort)                                   params.append('sort',       filters.sort);
+    if (filters.project_id)                             params.append('project_id', filters.project_id);
 
     const queryString = params.toString();
     return api(`/api/system-requests${queryString ? `?${queryString}` : ''}`);
   },
 
-  // Get a single request
+  /** GET /api/system-requests/:id */
   getRequest: (id) =>
-    api(`/api/system-requests/${id}`),
+    api(`/api/system-requests/${segment(id)}`),
 
-  // Get dashboard stats
+  /** GET /api/system-requests/stats */
   getStats: () =>
     api('/api/system-requests/stats'),
 
-  // Update a request (status, priority, admin notes)
+
+  // ----------------------------------------------------------
+  // Admin — mutate
+  // ----------------------------------------------------------
+
+  /** PUT /api/system-requests/:id */
   updateRequest: (id, data) =>
-    api(`/api/system-requests/${id}`, {
+    api(`/api/system-requests/${segment(id)}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
 
-  // Approve a request
+  /** POST /api/system-requests/:id/approve */
   approveRequest: (id) =>
-    api(`/api/system-requests/${id}/approve`, { method: 'POST' }),
+    api(`/api/system-requests/${segment(id)}/approve`, { method: 'POST' }),
 
-  // Reject a request
+  /** POST /api/system-requests/:id/reject */
   rejectRequest: (id, reason = '') =>
-    api(`/api/system-requests/${id}/reject`, {
+    api(`/api/system-requests/${segment(id)}/reject`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
     }),
 
-  // Mark a request as converted to a project
+  /** POST /api/system-requests/:id/convert */
   convertToProject: (id, projectId) =>
-    api(`/api/system-requests/${id}/convert`, {
+    api(`/api/system-requests/${segment(id)}/convert`, {
       method: 'POST',
       body: JSON.stringify({ project_id: projectId }),
     }),
 
-  // Delete a request
+  /** DELETE /api/system-requests/:id */
   deleteRequest: (id) =>
-    api(`/api/system-requests/${id}`, { method: 'DELETE' }),
+    api(`/api/system-requests/${segment(id)}`, { method: 'DELETE' }),
 
-  // ==================== PUBLIC METHOD ====================
 
-  // Submit a new request (from the public Qoech form)
-  // NOTE: uses a direct fetch instead of the api() helper because
-  // the public endpoint doesn't need auth and might be called
-  // from a different origin.
-  submitRequest: async (data) => {
-    const API_BASE = (await import('../config/constants.js')).API_BASE_URL;
-    const response = await fetch(`${API_BASE}/api/public/system-requests`, {
+  // ----------------------------------------------------------
+  // Public — no auth required
+  // ----------------------------------------------------------
+
+  /**
+   * POST /api/public/system-requests
+   * Submit a new request from the public Qoech form.
+   * @param {object} data
+   */
+  submitRequest: (data) =>
+    api('/api/public/system-requests', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'Submission failed' }));
-      throw new Error(err.error || 'Submission failed');
-    }
-    return response.json();
-  },
+      skipAuth: true,   // ← public endpoint — don't attach Bearer header
+    }),
 };
