@@ -1,58 +1,73 @@
-import { renderSidebar, initSidebar } from '../../components/sidebar.js';
-import { systemRequestService } from '../../services/systemRequestService.js';
-import { openRequestDetailModal } from '../../components/requestDetailModal.js';
-import { showToast } from '../../utils/notifications.js';
+// ============================================================
+// EAGLEVISION CLOUDBOARD — CLIENT REQUESTS PAGE
+// ============================================================
+// Lists inbound system requests (from qoechtech.com).
+// Features:
+//   • Stats grid (total, new, approved, converted, high priority)
+//   • Status tabs + priority filter + sort + search
+//   • Request cards → detail modal
+//   • Refresh button
+// ============================================================
 
+import { renderSidebar, initSidebar }      from '../../components/sidebar.js';
+import { systemRequestService }            from '../../services/systemRequestService.js';
+import { openRequestDetailModal }          from '../../components/requestDetailModal.js';
+import { showToast }                       from '../../utils/notifications.js';
+import { escapeHtml }                      from '../../utils/dom.js';
+import { format }                          from '../../utils/format.js';
+import { registerCleanup }                 from '../../utils/pageLifecycle.js';
+
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const SEARCH_DEBOUNCE_MS = 300;
+
+const STATUS_TABS = [
+  { key: 'all',       label: 'All',        icon: 'fa-list' },
+  { key: 'new',       label: 'New',        icon: 'fa-star' },
+  { key: 'reviewing', label: 'Reviewing',  icon: 'fa-eye' },
+  { key: 'approved',  label: 'Approved',   icon: 'fa-check' },
+  { key: 'rejected',  label: 'Rejected',   icon: 'fa-times' },
+  { key: 'converted', label: 'Converted',  icon: 'fa-rocket' },
+];
+
+
+// ============================================================
+// PAGE ENTRY
+// ============================================================
 export async function clientRequestsPage() {
-  document.body.classList.add('app-dashboard');
-
   const app = document.getElementById('app');
+
   app.innerHTML = `
     ${renderSidebar()}
     <div class="main-content">
       <div class="requests-header">
         <div class="header-left">
-          <div class="page-icon">
-            <i class="fas fa-inbox"></i>
-          </div>
+          <div class="page-icon"><i class="fas fa-inbox"></i></div>
           <div>
             <h2>Client Requests</h2>
             <p class="page-subtitle">System requests submitted from qoechtech.com</p>
           </div>
         </div>
         <div class="header-actions">
-          <button id="refresh-requests-btn" class="btn btn-outline">
+          <button id="refresh-requests-btn" class="btn btn-outline" type="button">
             <i class="fas fa-sync-alt"></i> Refresh
           </button>
         </div>
       </div>
 
-      <!-- Stats Grid -->
       <div id="requests-stats" class="requests-stats-grid">
         ${renderPlaceholderStats()}
       </div>
 
-      <!-- Filters -->
       <div class="requests-toolbar">
         <div class="filter-tabs" id="status-tabs">
-          <button class="tab-btn active" data-status="all">
-            <i class="fas fa-list"></i> All
-          </button>
-          <button class="tab-btn" data-status="new">
-            <i class="fas fa-star"></i> New
-          </button>
-          <button class="tab-btn" data-status="reviewing">
-            <i class="fas fa-eye"></i> Reviewing
-          </button>
-          <button class="tab-btn" data-status="approved">
-            <i class="fas fa-check"></i> Approved
-          </button>
-          <button class="tab-btn" data-status="rejected">
-            <i class="fas fa-times"></i> Rejected
-          </button>
-          <button class="tab-btn" data-status="converted">
-            <i class="fas fa-rocket"></i> Converted
-          </button>
+          ${STATUS_TABS.map((t) => `
+            <button type="button" class="tab-btn ${t.key === 'all' ? 'active' : ''}" data-status="${t.key}">
+              <i class="fas ${t.icon}"></i> ${t.label}
+            </button>
+          `).join('')}
         </div>
 
         <div class="search-wrapper">
@@ -60,21 +75,20 @@ export async function clientRequestsPage() {
           <input type="text" id="request-search" placeholder="Search by name, email, title, or reference code...">
         </div>
 
-        <select id="priority-filter" class="filter-select">
+        <select id="priority-filter" class="filter-select" aria-label="Filter by priority">
           <option value="all">All Priorities</option>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
 
-        <select id="sort-filter" class="filter-select">
+        <select id="sort-filter" class="filter-select" aria-label="Sort requests">
           <option value="newest">Newest First</option>
           <option value="oldest">Oldest First</option>
           <option value="priority">By Priority</option>
         </select>
       </div>
 
-      <!-- Requests Container -->
       <div id="requests-container">
         <div class="empty-state">
           <i class="fas fa-spinner fa-spin"></i>
@@ -86,64 +100,41 @@ export async function clientRequestsPage() {
 
   initSidebar();
 
-  // ==================== STATE ====================
+
+  // ---------- STATE ----------
   let allRequests = [];
-  let currentStatus = 'all';
+  let currentStatus   = 'all';
   let currentPriority = 'all';
-  let currentSearch = '';
-  let currentSort = 'newest';
-  let searchDebounce = null;
+  let currentSearch   = '';
+  let currentSort     = 'newest';
+  let searchTimer     = null;
+  let requestSeq      = 0;   // for stale-response detection
 
-  // ==================== DOM ====================
+
+  // ---------- DOM refs ----------
   const statsContainer = document.getElementById('requests-stats');
-  const container = document.getElementById('requests-container');
-  const searchInput = document.getElementById('request-search');
+  const container      = document.getElementById('requests-container');
+  const searchInput    = document.getElementById('request-search');
   const prioritySelect = document.getElementById('priority-filter');
-  const sortSelect = document.getElementById('sort-filter');
-  const statusTabs = document.getElementById('status-tabs');
+  const sortSelect     = document.getElementById('sort-filter');
+  const statusTabs     = document.getElementById('status-tabs');
+  const refreshBtn     = document.getElementById('refresh-requests-btn');
 
-  // ==================== HELPERS ====================
-  const escapeHtml = (text) =>
-    text ? String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
 
-  const formatRelativeDate = (iso) => {
-    if (!iso) return '—';
-    const date = new Date(iso);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMin = Math.floor(diffMs / 60000);
-    const diffHr = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHr / 24);
-
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHr < 24) return `${diffHr}h ago`;
-    if (diffDay < 7) return `${diffDay}d ago`;
-    return date.toLocaleDateString();
-  };
-
-  const priorityBadge = (p) => {
-    const map = {
-      high: '<span class="badge priority-high">HIGH</span>',
-      medium: '<span class="badge priority-medium">MEDIUM</span>',
-      low: '<span class="badge priority-low">LOW</span>',
+  // ---------- HELPERS ----------
+  function devOnly(label) {
+    return (err) => {
+      if (import.meta?.env?.DEV) console.warn(`[clientRequests] ${label}:`, err);
     };
-    return map[p] || map.medium;
-  };
+  }
 
-  const statusBadge = (s) => {
-    const map = {
-      new: '<span class="badge status-planned">NEW</span>',
-      reviewing: '<span class="badge status-in-progress">REVIEWING</span>',
-      approved: '<span class="badge status-completed">APPROVED</span>',
-      rejected: '<span class="badge badge-overdue">REJECTED</span>',
-      converted: '<span class="badge status-completed">CONVERTED</span>',
-    };
-    return map[s] || map.new;
-  };
 
-  // ==================== LOADING ====================
+  // ============================================================
+  // LOADING
+  // ============================================================
   async function loadRequests() {
+    const seq = ++requestSeq;
+
     container.innerHTML = `
       <div class="empty-state">
         <i class="fas fa-spinner fa-spin"></i>
@@ -153,15 +144,22 @@ export async function clientRequestsPage() {
 
     try {
       const filters = {};
-      if (currentStatus !== 'all') filters.status = currentStatus;
-      if (currentPriority !== 'all') filters.priority = currentPriority;
-      if (currentSearch) filters.search = currentSearch;
-      if (currentSort !== 'newest') filters.sort = currentSort;
+      if (currentStatus !== 'all')     filters.status   = currentStatus;
+      if (currentPriority !== 'all')   filters.priority = currentPriority;
+      if (currentSearch)               filters.search   = currentSearch;
+      if (currentSort !== 'newest')    filters.sort     = currentSort;
 
-      allRequests = await systemRequestService.getRequests(filters);
+      const result = await systemRequestService.getRequests(filters);
+
+      // Ignore stale responses (e.g., rapid filter changes)
+      if (seq !== requestSeq) return;
+
+      allRequests = Array.isArray(result) ? result : [];
       renderRequests();
     } catch (err) {
-      console.error('Failed to load requests:', err);
+      if (seq !== requestSeq) return;
+
+      devOnly('load requests')(err);
       container.innerHTML = `
         <div class="empty-state">
           <i class="fas fa-exclamation-circle"></i>
@@ -175,73 +173,87 @@ export async function clientRequestsPage() {
   async function loadStats() {
     try {
       const stats = await systemRequestService.getStats();
-      statsContainer.innerHTML = renderStats(stats);
+      statsContainer.innerHTML = renderStats(stats || {});
     } catch (err) {
-      console.error('Failed to load stats:', err);
+      devOnly('load stats')(err);
     }
   }
 
-  // ==================== RENDERING ====================
+
+  // ============================================================
+  // RENDERING
+  // ============================================================
   function renderPlaceholderStats() {
-    return `
-      <div class="stat-card glass-card"><div class="stat-info"><h3>Total</h3><p>--</p></div></div>
-      <div class="stat-card glass-card"><div class="stat-info"><h3>New</h3><p>--</p></div></div>
-      <div class="stat-card glass-card"><div class="stat-info"><h3>Approved</h3><p>--</p></div></div>
-      <div class="stat-card glass-card"><div class="stat-info"><h3>Converted</h3><p>--</p></div></div>
+    const card = (label) => `
+      <div class="stat-card">
+        <div class="stat-info">
+          <h3>${label}</h3>
+          <p class="kpi-placeholder">—</p>
+        </div>
+      </div>
     `;
+    return card('Total') + card('New') + card('Approved') + card('Converted');
   }
 
   function renderStats(stats) {
-    return `
-      <div class="stat-card glass-card">
-        <div class="stat-icon" style="background: rgba(62,224,127,0.1); color: var(--primary);">
-          <i class="fas fa-inbox"></i>
+    const cards = [
+      {
+        label: 'Total',
+        value: stats.total || 0,
+        icon:  'fa-inbox',
+        color: 'var(--primary)',
+        tint:  'var(--primary-tint)',
+        trend: stats.new_this_week > 0 ? `+${stats.new_this_week} this week` : '',
+      },
+      {
+        label: 'New',
+        value: stats.new_count || 0,
+        icon:  'fa-star',
+        color: 'var(--cyan)',
+        tint:  'var(--cyan-soft)',
+      },
+      {
+        label: 'Approved',
+        value: stats.approved || 0,
+        icon:  'fa-check-circle',
+        color: 'var(--status-dev)',
+        tint:  'rgba(217, 119, 6, 0.08)',
+      },
+      {
+        label: 'Converted',
+        value: stats.converted || 0,
+        icon:  'fa-rocket',
+        color: 'var(--status-info)',
+        tint:  'rgba(124, 58, 237, 0.08)',
+      },
+    ];
+
+    const html = cards.map((c) => `
+      <div class="stat-card">
+        <div class="stat-icon" style="background:${c.tint}; color:${c.color};">
+          <i class="fas ${c.icon}"></i>
         </div>
         <div class="stat-info">
-          <h3>Total</h3>
-          <p>${stats.total || 0}</p>
-          ${stats.new_this_week > 0 ? `<span class="stat-trend">+${stats.new_this_week} this week</span>` : ''}
+          <h3>${c.label}</h3>
+          <p>${format.number(c.value)}</p>
+          ${c.trend ? `<span class="stat-trend">${escapeHtml(c.trend)}</span>` : ''}
         </div>
       </div>
-      <div class="stat-card glass-card">
-        <div class="stat-icon" style="background: rgba(90,200,250,0.1); color: var(--cyan);">
-          <i class="fas fa-star"></i>
-        </div>
-        <div class="stat-info">
-          <h3>New</h3>
-          <p>${stats.new_count || 0}</p>
-        </div>
-      </div>
-      <div class="stat-card glass-card">
-        <div class="stat-icon" style="background: rgba(255,184,0,0.1); color: var(--status-dev);">
-          <i class="fas fa-check-circle"></i>
-        </div>
-        <div class="stat-info">
-          <h3>Approved</h3>
-          <p>${stats.approved || 0}</p>
-        </div>
-      </div>
-      <div class="stat-card glass-card">
-        <div class="stat-icon" style="background: rgba(167,139,250,0.1); color: var(--status-info);">
-          <i class="fas fa-rocket"></i>
-        </div>
-        <div class="stat-info">
-          <h3>Converted</h3>
-          <p>${stats.converted || 0}</p>
-        </div>
-      </div>
-      ${stats.high_priority > 0 ? `
-      <div class="stat-card glass-card stat-alert">
-        <div class="stat-icon" style="background: rgba(255,92,92,0.15); color: var(--status-error);">
+    `).join('');
+
+    const alertCard = (Number(stats.high_priority) > 0) ? `
+      <div class="stat-card stat-alert">
+        <div class="stat-icon" style="background:rgba(220,38,38,0.08); color:var(--status-error);">
           <i class="fas fa-exclamation-triangle"></i>
         </div>
         <div class="stat-info">
           <h3>High Priority</h3>
-          <p>${stats.high_priority}</p>
+          <p>${format.number(stats.high_priority)}</p>
         </div>
       </div>
-      ` : ''}
-    `;
+    ` : '';
+
+    return html + alertCard;
   }
 
   function renderRequests() {
@@ -257,14 +269,28 @@ export async function clientRequestsPage() {
 
     container.innerHTML = `
       <div class="requests-list">
-        ${allRequests.map((r) => renderRequestCard(r)).join('')}
+        ${allRequests.map(renderRequestCard).join('')}
       </div>
     `;
   }
 
   function renderRequestCard(r) {
+    const budgetPart = r.budget_range ? `
+      <span class="request-meta-item">
+        <i class="fas fa-dollar-sign"></i>
+        <span>${escapeHtml(r.budget_range)}</span>
+      </span>
+    ` : '';
+
+    const companyPart = r.company ? `
+      <span class="request-meta-item">
+        <i class="fas fa-building"></i>
+        <span>${escapeHtml(r.company)}</span>
+      </span>
+    ` : '';
+
     return `
-      <div class="request-card glass-card" data-id="${r.id}">
+      <div class="request-card" data-id="${escapeHtml(r.id)}">
         <div class="request-card-header">
           <div class="request-card-ref">
             <i class="fas fa-hashtag"></i> ${escapeHtml(r.reference_code)}
@@ -288,29 +314,19 @@ export async function clientRequestsPage() {
             <i class="fas fa-user"></i>
             <span>${escapeHtml(r.full_name)}</span>
           </span>
-          ${r.company ? `
-          <span class="request-meta-item">
-            <i class="fas fa-building"></i>
-            <span>${escapeHtml(r.company)}</span>
-          </span>
-          ` : ''}
+          ${companyPart}
           <span class="request-meta-item">
             <i class="fas fa-clock"></i>
-            <span>${formatRelativeDate(r.created_at)}</span>
+            <span>${format.timeAgo(r.created_at)}</span>
           </span>
-          ${r.budget_range ? `
-          <span class="request-meta-item">
-            <i class="fas fa-dollar-sign"></i>
-            <span>${escapeHtml(r.budget_range)}</span>
-          </span>
-          ` : ''}
+          ${budgetPart}
         </div>
 
         <div class="request-card-footer">
           <span class="request-card-hint">
             <i class="fas fa-mouse-pointer"></i> Click to view details
           </span>
-          <button class="btn btn-sm btn-primary view-request-btn" data-id="${r.id}">
+          <button type="button" class="btn btn-sm btn-primary view-request-btn" tabindex="-1" aria-hidden="true">
             <i class="fas fa-eye"></i> View
           </button>
         </div>
@@ -318,25 +334,54 @@ export async function clientRequestsPage() {
     `;
   }
 
-  // ==================== EVENTS ====================
+
+  // ============================================================
+  // BADGE BUILDERS
+  // ============================================================
+  function statusBadge(status) {
+    const map = {
+      new:       '<span class="badge status-planned">NEW</span>',
+      reviewing: '<span class="badge status-in-progress">REVIEWING</span>',
+      approved:  '<span class="badge status-completed">APPROVED</span>',
+      rejected:  '<span class="badge badge-overdue">REJECTED</span>',
+      converted: '<span class="badge status-completed">CONVERTED</span>',
+    };
+    return map[status] || map.new;
+  }
+
+  function priorityBadge(priority) {
+    const map = {
+      high:   '<span class="badge priority-high">HIGH</span>',
+      medium: '<span class="badge priority-medium">MEDIUM</span>',
+      low:    '<span class="badge priority-low">LOW</span>',
+    };
+    return map[priority] || map.medium;
+  }
+
+
+  // ============================================================
+  // EVENTS
+  // ============================================================
   function bindEvents() {
     // Status tabs
     statusTabs.addEventListener('click', (e) => {
       const btn = e.target.closest('.tab-btn');
       if (!btn) return;
+      if (btn.classList.contains('active')) return;
+
       statusTabs.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       currentStatus = btn.dataset.status;
       loadRequests();
     });
 
-    // Search with debounce
+    // Debounced search
     searchInput.addEventListener('input', () => {
-      clearTimeout(searchDebounce);
-      searchDebounce = setTimeout(() => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
         currentSearch = searchInput.value.trim();
         loadRequests();
-      }, 300);
+      }, SEARCH_DEBOUNCE_MS);
     });
 
     // Priority filter
@@ -351,28 +396,45 @@ export async function clientRequestsPage() {
       loadRequests();
     });
 
-    // Refresh button
-    document.getElementById('refresh-requests-btn').addEventListener('click', () => {
+    // Refresh
+    refreshBtn.addEventListener('click', () => {
       loadStats();
       loadRequests();
     });
-
-    // Card click → open detail modal
-    container.addEventListener('click', (e) => {
-      const card = e.target.closest('.request-card');
-      if (!card) return;
-      const id = card.dataset.id;
-      const request = allRequests.find((r) => String(r.id) === String(id));
-      if (!request) return;
-
-      openRequestDetailModal(request, () => {
-        loadStats();
-        loadRequests();
-      });
-    });
   }
 
-  // ==================== INIT ====================
+  // Card click → detail modal (delegated)
+  const onContainerClick = (e) => {
+    const card = e.target.closest('.request-card');
+    if (!card) return;
+
+    const id = card.dataset.id;
+    const request = allRequests.find((r) => String(r.id) === String(id));
+    if (!request) return;
+
+    openRequestDetailModal(request, () => {
+      loadStats();
+      loadRequests();
+    });
+  };
+
+
+  // ============================================================
+  // CLEANUP
+  // ============================================================
+  registerCleanup(() => {
+    clearTimeout(searchTimer);
+    searchTimer = null;
+    container.removeEventListener('click', onContainerClick);
+    requestSeq++;   // invalidate any in-flight response
+  });
+
+
+  // ============================================================
+  // INIT
+  // ============================================================
   bindEvents();
+  container.addEventListener('click', onContainerClick);
+
   await Promise.all([loadStats(), loadRequests()]);
 }
