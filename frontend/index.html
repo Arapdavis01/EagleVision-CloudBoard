@@ -1,40 +1,108 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EagleVision CloudBoard – Project Management Dashboard</title>
-  <meta name="description" content="Professional project portfolio management system for solo developers. Track projects, clients, revenue, expenses, uptime, and service records all in one place.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
-  <!-- Theme color for mobile browser chrome -->
-  <meta name="theme-color" content="#050B14">
+  <!-- ============================================================
+       PRIMARY META
+       ============================================================ -->
+  <title>EagleVision CloudBoard — Project Management Dashboard</title>
+  <meta name="description" content="Professional project portfolio management system for solo developers. Track projects, clients, revenue, expenses, uptime, and service records — all in one place.">
+  <meta name="author" content="Qoech Technologies">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FFFFFF">
 
-  <!-- Google Fonts: Inter + Orbitron (Qoech theme) -->
+  <!-- ============================================================
+       PWA / MOBILE
+       ============================================================ -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="EagleVision">
+  <meta name="format-detection" content="telephone=no">
+
+  <!-- ============================================================
+       FONTS
+       Inter         → body text
+       Space Grotesk → headings, buttons, labels (display)
+       JetBrains Mono→ code, reference codes, monospaced values
+       ============================================================ -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@500;700;800;900&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  >
 
-  <!-- Font Awesome 6 (free) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- ============================================================
+       ICONS
+       ============================================================ -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    referrerpolicy="no-referrer"
+  >
 
-  <!-- Favicon (inline SVG, no external file needed) -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦅</text></svg>">
+  <!-- ============================================================
+       FAVICON (inline SVG — no external file needed)
+       ============================================================ -->
+  <link
+    rel="icon"
+    type="image/svg+xml"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦅</text></svg>"
+  >
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦅</text></svg>">
 
-  <!-- Main Stylesheet (Qoech theme — all component styles live here) -->
+  <!-- ============================================================
+       STYLES — single consolidated stylesheet
+       ============================================================ -->
+  <link rel="preload" as="style" href="assets/css/main.css">
   <link rel="stylesheet" href="assets/css/main.css">
 
-  <!-- Chart.js for dashboard analytics -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- ============================================================
+       SCRIPTS (deferred so they don't block first paint)
+       ============================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
-<body>
+
+<body class="theme-light">
+
+  <!-- ============================================================
+       APP SHELL — everything renders inside #app via src/app.js
+       ============================================================ -->
   <div id="app"></div>
 
+  <!-- ============================================================
+       NO-JS FALLBACK
+       ============================================================ -->
   <noscript>
-    <p style="text-align:center; margin-top: 20px; color: #EDEDED;">
-      Please enable JavaScript to use EagleVision CloudBoard.
-    </p>
+    <div style="
+      max-width: 480px;
+      margin: 80px auto;
+      padding: 32px 28px;
+      background: #FFFFFF;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: 16px;
+      box-shadow: 0 12px 24px -6px rgba(15, 23, 42, 0.08);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      text-align: center;
+      color: #0F172A;
+    ">
+      <div style="font-size: 40px; margin-bottom: 12px;">🦅</div>
+      <h1 style="font-size: 20px; margin: 0 0 8px; color: #0F172A;">
+        JavaScript Required
+      </h1>
+      <p style="font-size: 15px; line-height: 1.6; color: #475569; margin: 0;">
+        EagleVision CloudBoard needs JavaScript enabled to run.
+        Please enable it in your browser settings and reload the page.
+      </p>
+    </div>
   </noscript>
 
+  <!-- ============================================================
+       APPLICATION ENTRY POINT
+       ============================================================ -->
   <script type="module" src="src/app.js"></script>
+
 </body>
 </html>
