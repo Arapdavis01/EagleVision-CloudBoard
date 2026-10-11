@@ -165,7 +165,14 @@
   --border:         var(--border-dim);
   --error:          var(--status-error);
   --success:        var(--primary);
-  --warning:        var(--status-warn);
+    --warning:        var(--status-warn);
+
+  /* ---------- Skeleton loaders ---------- */
+  --skeleton-base:  #F1F4F8;
+  --skeleton-shine: #E4E9F0;
+
+  /* ---------- Overlay / backdrop ---------- */
+  --overlay-dim:    rgba(15, 23, 42, 0.55);
 }
 
 html {
@@ -6154,9 +6161,15 @@ body.modal-open { overflow: hidden; }
   position: relative;
 }
 
-.custom-select-option:hover {
+.custom-select-option:hover,
+.custom-select-option.highlighted {
   background: var(--primary-tint);
   color: var(--primary-dark);
+}
+
+.custom-select-option.highlighted {
+  outline: 2px solid var(--primary-soft);
+  outline-offset: -2px;
 }
 
 .custom-select-option.selected {
@@ -6202,37 +6215,89 @@ body.modal-open { overflow: hidden; }
 
 
 /* ============================================================
-   30. TOASTS
+   30. TOASTS (stacking)
    ============================================================ */
-.toast {
+
+/* ---------- Container — stacks toasts vertically ---------- */
+.toast-container {
   position: fixed;
   top: 24px;
   right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+  pointer-events: none;
+  max-width: 380px;
+}
+
+/* ---------- Individual toast ---------- */
+.toast {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.8rem;
   background: #FFFFFF;
   color: var(--text-primary);
-  padding: 0.9rem 1.3rem;
+  padding: 0.9rem 1.1rem 0.9rem 1.3rem;
   border-radius: var(--radius-md);
-  z-index: 9999;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-subtle);
   border-left: 4px solid var(--primary);
   font-weight: 500;
   font-size: 0.9rem;
   animation: toastSlideIn 0.35s cubic-bezier(0.21, 1.02, 0.73, 1);
-  max-width: 380px;
+  pointer-events: auto;
+  max-width: 100%;
+  min-width: 240px;
 }
+
 .toast.toast-success { border-left-color: var(--primary); }
-.toast.toast-error { border-left-color: var(--status-error); }
-.toast.toast-info { border-left-color: var(--cyan); }
+.toast.toast-error   { border-left-color: var(--status-error); }
+.toast.toast-info    { border-left-color: var(--cyan); }
+.toast.toast-warning { border-left-color: var(--status-warn); }
 
-.toast .toast-icon { font-size: 1.3rem; }
+.toast .toast-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
 .toast.toast-success .toast-icon { color: var(--primary); }
-.toast.toast-error .toast-icon { color: var(--status-error); }
-.toast.toast-info .toast-icon { color: var(--cyan); }
+.toast.toast-error   .toast-icon { color: var(--status-error); }
+.toast.toast-info    .toast-icon { color: var(--cyan); }
+.toast.toast-warning .toast-icon { color: var(--status-warn); }
 
+.toast .toast-message {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+/* ---------- Close button ---------- */
+.toast .toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  margin-left: auto;
+  border-radius: 4px;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.toast .toast-close:hover {
+  color: var(--text-heading);
+  background: var(--bg-subtle);
+}
+.toast.toast-error .toast-close:hover {
+  color: var(--status-error);
+  background: rgba(220, 38, 38, 0.06);
+}
+
+/* ---------- Exit animation ---------- */
 .toast.toast-hidden {
   opacity: 0;
   transform: translateX(40px);
@@ -6241,9 +6306,19 @@ body.modal-open { overflow: hidden; }
 
 @keyframes toastSlideIn {
   from { opacity: 0; transform: translateX(40px); }
-  to { opacity: 1; transform: translateX(0); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
+/* ---------- Responsive ---------- */
+@media (max-width: 480px) {
+  .toast-container {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
+  .toast { min-width: 0; }
+}
 
 /* ============================================================
    31. CONFIRM DIALOG
@@ -6360,6 +6435,81 @@ body.modal-open { overflow: hidden; }
 }
 .back-to-top.visible { opacity: 1; visibility: visible; transform: translateY(0); }
 .back-to-top:hover { transform: translateY(-3px); box-shadow: var(--shadow-brand); }
+/* ============================================================
+   33b. SKELETON LOADERS
+   ============================================================ */
+@keyframes skeletonShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base) 0%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-xs);
+}
+
+.skeleton-card {
+  pointer-events: none;
+  opacity: 0.85;
+  /* keep card visual shape but dim content */
+}
+
+.skeleton-title {
+  height: 20px;
+  width: 70%;
+  margin-bottom: 12px;
+}
+
+.skeleton-text {
+  height: 12px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.skeleton-text.short {
+  width: 45%;
+}
+
+.skeleton-badge {
+  height: 22px;
+  width: 80px;
+  border-radius: var(--radius-pill);
+  margin-top: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+
+/* ============================================================
+   33c. KPI PLACEHOLDER
+   ============================================================ */
+.kpi-placeholder {
+  color: var(--text-muted) !important;
+  opacity: 0.6;
+  letter-spacing: 0.08em;
+}
+
+
+/* ============================================================
+   33d. PAGE BODY CLASSES
+   ============================================================
+   Hooks for page-specific tweaks. The router adds these to
+   <body> based on the active route.
+   ============================================================ */
+body.page-dashboard .main-content {
+  padding: 1.5rem 2rem;
+}
+
+/* Future-ready: add page-specific overrides here as needed */
 
 
 /* ============================================================
