@@ -91,10 +91,10 @@ export async function financePage() {
   }
 
   function formatDualCurrency(usdAmount) {
-    const usd = Number(usdAmount) || 0;
-    const kes = usd * exchangeRate;
-    return `${format.currency(usd)} <small class="text-muted">(${format.currency(kes)})</small>`;
-  }
+  const usd = Number(usdAmount) || 0;
+  const kes = usd * exchangeRate;
+  return `${format.usd(usd)} <small class="text-muted">(${format.kes(kes)})</small>`;
+}
 
   function updateRateBadge() {
     const el = document.getElementById('rate-value');
