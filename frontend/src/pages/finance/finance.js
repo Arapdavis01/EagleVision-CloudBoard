@@ -14,6 +14,12 @@
 //   • Add / edit / delete sales and expenses
 //   • Multi-expense entry form
 //   • Exchange rate editor
+//
+// Currency convention:
+//   • Backend stores all money in USD
+//   • The "dual currency" helper shows $X (KSh Y)
+//   • Use format.usd() for USD-only displays
+//   • Use format.kes() for KES-only displays
 // ============================================================
 
 import { renderSidebar, initSidebar }    from '../../components/sidebar.js';
@@ -91,10 +97,10 @@ export async function financePage() {
   }
 
   function formatDualCurrency(usdAmount) {
-  const usd = Number(usdAmount) || 0;
-  const kes = usd * exchangeRate;
-  return `${format.usd(usd)} <small class="text-muted">(${format.kes(kes)})</small>`;
-}
+    const usd = Number(usdAmount) || 0;
+    const kes = usd * exchangeRate;
+    return `${format.usd(usd)} <small class="text-muted">(${format.kes(kes)})</small>`;
+  }
 
   function updateRateBadge() {
     const el = document.getElementById('rate-value');
@@ -356,10 +362,11 @@ export async function financePage() {
         const rev    = Number(net?.total_revenue) || 0;
         const exp    = Number(net?.total_expense) || 0;
 
+        // FIX: USD for the small breakdown
         el.innerHTML = `
           ${formatDualCurrency(income)}
           <br>
-          <small>Revenue: ${format.currency(rev)} | Expenses: ${format.currency(exp)}</small>
+          <small>Revenue: ${format.usd(rev)} | Expenses: ${format.usd(exp)}</small>
         `;
       } catch (err) {
         devOnly('net income')(err);
@@ -529,8 +536,9 @@ export async function financePage() {
       if (!sale) return;
 
       if (btn.classList.contains('delete-revenue')) {
+        // FIX: USD
         const ok = await confirmDialog(
-          `Delete sale of ${format.currency(sale.amount)}?`,
+          `Delete sale of ${format.usd(sale.amount)}?`,
           'Confirm Deletion'
         );
         if (!ok) return;
@@ -760,10 +768,11 @@ export async function financePage() {
         const rev    = Number(net?.total_revenue) || 0;
         const exp    = Number(net?.total_expense) || 0;
 
+        // FIX: USD for the small breakdown
         el.innerHTML = `
           ${formatDualCurrency(income)}
           <br>
-          <small>Revenue: ${format.currency(rev)} | Expenses: ${format.currency(exp)}</small>
+          <small>Revenue: ${format.usd(rev)} | Expenses: ${format.usd(exp)}</small>
         `;
       } catch (err) {
         devOnly('net income')(err);
@@ -938,8 +947,9 @@ export async function financePage() {
       if (!expense) return;
 
       if (btn.classList.contains('delete-expense')) {
+        // FIX: USD
         const ok = await confirmDialog(
-          `Delete expense of ${format.currency(expense.amount)}?`,
+          `Delete expense of ${format.usd(expense.amount)}?`,
           'Confirm Deletion'
         );
         if (!ok) return;
@@ -1055,7 +1065,8 @@ export async function financePage() {
       tbody.querySelectorAll('.expense-amount').forEach((input) => {
         total += parseFloat(input.value) || 0;
       });
-      totalEl.textContent = format.currency(total);
+      // FIX: USD — the input values are in USD
+      totalEl.textContent = format.usd(total);
     }
 
     function buildRow(index) {
