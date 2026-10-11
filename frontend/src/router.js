@@ -9,8 +9,9 @@
 //   • Scroll-to-top on navigation
 //   • Loading state during page boot
 //   • Friendly 404 + error screens
-//   • Handles 'ev:session-expired' emitted by api.js
+//   • Runs page cleanups before route change
 //   • Manages page-level body classes
+//   • Enforces idle timeout
 // ============================================================
 
 import { loginPage }          from './pages/login/login.js';
@@ -26,6 +27,8 @@ import { approveLoginPage }   from './pages/approveLogin/approveLogin.js';
 import { initCustomSelects }  from './components/customSelect.js';
 
 import { authService }        from './services/authService.js';
+import { storage }            from './utils/storage.js';
+import { runCleanups }        from './utils/pageLifecycle.js';
 import {
   APP_NAME,
   ROUTES,
@@ -52,7 +55,7 @@ const routes = {
 
 const DEFAULT_ROUTE = ROUTES.DASHBOARD;
 
-// Page-specific body classes (added to <body> while that route is active)
+// Page-specific body classes (added while that route is active)
 const PAGE_BODY_CLASSES = {
   [ROUTES.DASHBOARD]: 'page-dashboard',
   [ROUTES.PROJECTS]:  'page-projects',
@@ -64,8 +67,8 @@ const PAGE_BODY_CLASSES = {
 // ============================================================
 // HELPERS
 // ============================================================
-function isPublic(route) {
-  return PUBLIC_ROUTES.includes(route);
+function isPublic(routeBase) {
+  return PUBLIC_ROUTES.includes(routeBase);
 }
 
 function setPageTitle(title) {
@@ -73,10 +76,12 @@ function setPageTitle(title) {
 }
 
 function setActiveNavLink(baseHash) {
-  document.querySelectorAll('.sidebar a[href^="#"], .nav-link[href^="#"]').forEach((link) => {
-    const linkHash = link.getAttribute('href').split('?')[0];
-    link.classList.toggle('active', linkHash === baseHash);
-  });
+  document
+    .querySelectorAll('.sidebar a[href^="#"], .nav-link[href^="#"]')
+    .forEach((link) => {
+      const linkHash = link.getAttribute('href').split('?')[0];
+      link.classList.toggle('active', linkHash === baseHash);
+    });
 }
 
 function setPageBodyClass(baseHash) {
@@ -102,10 +107,10 @@ function getHash() {
 // ============================================================
 // LOADING / ERROR / 404 SCREENS
 // ============================================================
-function renderLoading() {
+function renderLoading(force = false) {
   const app = document.getElementById('app');
   if (!app) return;
-  if (app.children.length > 0) return;
+  if (!force && app.children.length > 0) return;
   app.innerHTML = `
     <div style="
       display:flex;align-items:center;justify-content:center;
@@ -194,14 +199,15 @@ function renderNotFound() {
 // ============================================================
 function enforceIdleTimeout() {
   if (!AUTH.IDLE_TIMEOUT_MS) return;
+  if (!authService.isAuthenticated()) return;
   if (storage.auth.isIdle()) {
     storage.auth.clearAll();
-    window.dispatchEvent(new CustomEvent('ev:session-expired'));
+    // Navigate directly instead of relying on an external listener
+    if (location.hash !== ROUTES.LOGIN) {
+      location.hash = ROUTES.LOGIN;
+    }
   }
 }
-
-// Local import to avoid a top-level import conflict with storage.js
-import { storage } from './utils/storage.js';
 
 
 // ============================================================
@@ -225,6 +231,8 @@ export async function initRouter() {
 
   // ---------- 2. Idle check ----------
   enforceIdleTimeout();
+  // If idle just triggered a redirect, stop here
+  if (!authService.isAuthenticated() && !isPublic(hash.base)) return;
 
   // ---------- 3. Unknown route → 404 ----------
   if (!route) {
@@ -234,10 +242,20 @@ export async function initRouter() {
     return;
   }
 
-  // ---------- 4. Load page ----------
+  // ---------- 4. Clean up previous page ----------
+  // Runs before loading the new page: kills charts, timers,
+  // intervals, global listeners registered by the old page.
+  runCleanups();
+
+  // ---------- 5. Load page ----------
   setPageTitle(route.title);
   setPageBodyClass(hash.base);
-  renderLoading();
+
+  // If the hash has a query, we're likely doing a same-page nav
+  // (e.g. #finance?section=revenue). Skip the loading screen in that
+  // case — it would flash needlessly. Otherwise show it.
+  const samePageNav = false; // future: track previous base
+  renderLoading(!samePageNav);
 
   try {
     await route.loader();
@@ -253,6 +271,9 @@ export async function initRouter() {
 
 // ============================================================
 // SESSION-EXPIRED LISTENER
+// ============================================================
+// app.js already handles the redirect — this is a safety net
+// in case the router boots standalone (e.g., tests).
 // ============================================================
 window.addEventListener('ev:session-expired', () => {
   if (location.hash !== ROUTES.LOGIN) {
