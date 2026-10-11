@@ -1,45 +1,117 @@
-/**
- * Modern Modal Component
- * ─────────────────────
- * Renders a modal overlay + content with:
- *   • Auto-injected close button (×)
- *   • Backdrop click to close
- *   • ESC key to close
- *   • Body scroll lock
- *   • Smooth enter/exit animations
- *   • Automatic custom-select conversion (all <select> → styled dropdowns)
- *   • Cleanup on close
- *
- * Usage:
- *   const { close, element } = showModal(htmlString, options);
- *   // or
- *   const modal = showModal(htmlString, { size: 'lg' });
- *   modal.close();
- */
+// ============================================================
+// EAGLEVISION CLOUDBOARD — MODAL COMPONENT
+// ============================================================
+// Renders a modal overlay + content with:
+//   • Auto-injected close button (×)
+//   • Backdrop click to close
+//   • ESC key to close (topmost modal only)
+//   • Body scroll lock (stack-aware)
+//   • Focus trap (Tab cycles within the modal)
+//   • Smooth enter/exit animations
+//   • Auto custom-select conversion
+//   • ARIA attributes for screen readers
+//
+// Usage:
+//   const { close, element } = showModal(htmlString, { size: 'lg' });
+//   close();
+//
+//   const ok = await confirmModal({ title: 'Delete?', ... });
+//   const name = await promptModal({ title: 'Rename', ... });
+// ============================================================
 
 import { initCustomSelects } from './customSelect.js';
+import { escapeHtml } from '../utils/dom.js';
+import { MODAL_ANIMATION_MS } from '../config/constants.js';
 
+
+// ============================================================
+// MODAL STACK — for scroll lock + ESC handling
+// ============================================================
+const openModals = new Set();
+
+function lockBodyScroll() {
+  document.body.classList.add('modal-open');
+}
+
+function unlockBodyScroll() {
+  if (openModals.size === 0) {
+    document.body.classList.remove('modal-open');
+  }
+}
+
+
+// ============================================================
+// FOCUS TRAP — cycle Tab inside the modal
+// ============================================================
+const FOCUSABLE = [
+  'a[href]',
+  'button:not([disabled]):not(.modal-close-btn)',
+  'input:not([type="hidden"]):not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function getFocusable(root) {
+  return Array.from(root.querySelectorAll(FOCUSABLE)).filter(
+    (el) => el.offsetParent !== null  // exclude hidden
+  );
+}
+
+function createFocusTrap(modal) {
+  function onKeydown(e) {
+    if (e.key !== 'Tab') return;
+
+    const focusable = getFocusable(modal);
+    if (focusable.length === 0) {
+      e.preventDefault();
+      return;
+    }
+
+    const first = focusable[0];
+    const last  = focusable[focusable.length - 1];
+    const active = document.activeElement;
+
+    if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  modal.addEventListener('keydown', onKeydown);
+  return () => modal.removeEventListener('keydown', onKeydown);
+}
+
+
+// ============================================================
+// SHOW MODAL
+// ============================================================
 export function showModal(contentHTML, options = {}) {
-  // ---------- Options ----------
   const {
-    size = 'md',                 // 'sm' | 'md' | 'lg' | 'xl' | 'full'
-    closeOnBackdrop = true,      // click outside to close
-    closeOnEsc = true,           // ESC key to close
-    showCloseButton = true,      // inject the × button
-    onClose = null               // callback after close
+    size = 'md',                // 'sm' | 'md' | 'lg' | 'xl' | 'full'
+    closeOnBackdrop = true,
+    closeOnEsc = true,
+    showCloseButton = true,
+    onClose = null,
   } = options;
 
-  // ---------- Create overlay ----------
+  // ---------- Overlay ----------
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
 
-  // ---------- Create content container ----------
+  // ---------- Content ----------
   const modal = document.createElement('div');
   modal.className = `modal-content modal-${size}`;
 
-  // ---------- Inject close button ----------
+  // Close button
   if (showCloseButton) {
     const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
     closeBtn.className = 'modal-close-btn';
     closeBtn.setAttribute('aria-label', 'Close modal');
     closeBtn.innerHTML = '<i class="fas fa-times"></i>';
@@ -47,8 +119,7 @@ export function showModal(contentHTML, options = {}) {
     modal.appendChild(closeBtn);
   }
 
-  // ---------- Inject content ----------
-  // Wrap the content in a scrollable .modal-body if it's not already structured
+  // Inject content — structured or wrapped
   const temp = document.createElement('div');
   temp.innerHTML = contentHTML;
 
@@ -59,12 +130,10 @@ export function showModal(contentHTML, options = {}) {
     temp.querySelector('.modal-footer');
 
   if (hasStructure) {
-    // Content already has structure — append as-is
     while (temp.firstChild) {
       modal.appendChild(temp.firstChild);
     }
   } else {
-    // Wrap raw content in a scrollable body
     const body = document.createElement('div');
     body.className = 'modal-body';
     while (temp.firstChild) {
@@ -76,24 +145,42 @@ export function showModal(contentHTML, options = {}) {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // ---------- Auto-convert all <select> inside the modal to custom dropdowns ----------
+  // ---------- Register in stack ----------
+  openModals.add(overlay);
+  lockBodyScroll();
+
+  // ---------- Custom select conversion ----------
   try {
     initCustomSelects(modal);
   } catch (err) {
-    console.warn('initCustomSelects failed inside modal:', err);
+    if (import.meta?.env?.DEV) {
+      console.warn('[modal] initCustomSelects failed:', err);
+    }
   }
 
-  // ---------- Lock body scroll ----------
-  document.body.classList.add('modal-open');
+  // ---------- Focus management ----------
+  const previouslyFocused = document.activeElement;
+
+  // Delay focus so the DOM is settled — but check we're still mounted
+  const focusTimer = setTimeout(() => {
+    if (!document.body.contains(overlay)) return;
+
+    // Prefer first form field; fall back to the modal itself
+    const firstField = modal.querySelector(
+      'input:not([type="hidden"]):not([disabled]), ' +
+      'select:not([disabled]), ' +
+      'textarea:not([disabled])'
+    );
+    if (firstField) {
+      firstField.focus();
+    } else {
+      modal.setAttribute('tabindex', '-1');
+      modal.focus();
+    }
+  }, 50);
 
   // ---------- Focus trap ----------
-  const previouslyFocused = document.activeElement;
-  setTimeout(() => {
-    const firstInput = modal.querySelector(
-      'input:not([type="hidden"]), select, textarea, button:not(.modal-close-btn)'
-    );
-    if (firstInput) firstInput.focus();
-  }, 50);
+  const releaseFocusTrap = createFocusTrap(modal);
 
   // ---------- Handlers ----------
   function onBackdropClick(e) {
@@ -103,72 +190,90 @@ export function showModal(contentHTML, options = {}) {
   }
 
   function onEscKey(e) {
-    if (closeOnEsc && e.key === 'Escape') {
-      close();
-    }
+    if (!closeOnEsc) return;
+    if (e.key !== 'Escape') return;
+
+    // Only the topmost modal responds to ESC
+    const modalsArray = Array.from(openModals);
+    const topmost = modalsArray[modalsArray.length - 1];
+    if (topmost !== overlay) return;
+
+    e.stopPropagation();
+    close();
   }
 
-  // ---------- Attach listeners ----------
   overlay.addEventListener('click', onBackdropClick);
   document.addEventListener('keydown', onEscKey);
 
-  // ---------- Close function ----------
+  // ---------- Close ----------
   let isClosed = false;
   function close() {
     if (isClosed) return;
     isClosed = true;
 
+    clearTimeout(focusTimer);
+
     // Remove listeners
     overlay.removeEventListener('click', onBackdropClick);
     document.removeEventListener('keydown', onEscKey);
+    releaseFocusTrap();
 
     // Animate out
     overlay.style.animation = 'modalOverlayOut 0.2s ease forwards';
-    modal.style.animation = 'modalSlideOut 0.2s ease forwards';
+    modal.style.animation    = 'modalSlideOut 0.2s ease forwards';
 
     setTimeout(() => {
       overlay.remove();
-      document.body.classList.remove('modal-open');
+      openModals.delete(overlay);
+      unlockBodyScroll();
 
-      // Restore focus
+      // Restore focus — but only if we're not navigating away
       if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-        previouslyFocused.focus();
+        try { previouslyFocused.focus({ preventScroll: true }); } catch (_) {}
       }
 
       if (typeof onClose === 'function') onClose();
-    }, 200);
+    }, MODAL_ANIMATION_MS - 100); // 200ms matches CSS exit
   }
 
-  // ---------- Return API ----------
+  // ---------- API ----------
   return { close, element: modal, overlay };
 }
 
 
+// ============================================================
+// CONFIRM MODAL
+// ============================================================
 /**
- * Modern Confirm Dialog
- * ─────────────────────
- * Returns a Promise<boolean> — true if confirmed, false if cancelled.
+ * Promise-based confirm dialog.
+ * Resolves true if confirmed, false if cancelled or dismissed.
  *
- * Usage:
+ * @example
  *   const ok = await confirmModal({
  *     title: 'Delete Project?',
  *     message: 'This action cannot be undone.',
  *     confirmText: 'Delete',
- *     confirmClass: 'btn-danger'
+ *     confirmClass: 'btn-danger',
  *   });
  */
-
 export function confirmModal({
-  title = 'Are you sure?',
-  message = '',
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  title        = 'Are you sure?',
+  message      = '',
+  confirmText  = 'Confirm',
+  cancelText   = 'Cancel',
   confirmClass = 'btn-primary',
-  icon = 'fa-exclamation-triangle',
-  iconColor = 'var(--status-warn)',
-  size = 'sm'
+  icon         = 'fa-exclamation-triangle',
+  iconColor    = 'var(--status-warn)',
+  size         = 'sm',
 } = {}) {
   return new Promise((resolve) => {
+    let resolved = false;
+    const settle = (value) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(value);
+    };
+
     const content = `
       <div class="modal-body">
         <div class="confirm-dialog">
@@ -189,36 +294,47 @@ export function confirmModal({
       </div>
     `;
 
-    const { close, element } = showModal(content, { size });
-
-    element.querySelector('#confirm-cancel').addEventListener('click', () => {
-      close();
-      resolve(false);
+    const { close, element } = showModal(content, {
+      size,
+      onClose: () => settle(false),  // backdrop / ESC = cancel
     });
 
-    element.querySelector('#confirm-ok').addEventListener('click', () => {
+    element.querySelector('#confirm-cancel')?.addEventListener('click', () => {
       close();
-      resolve(true);
+      settle(false);
+    });
+
+    element.querySelector('#confirm-ok')?.addEventListener('click', () => {
+      close();
+      settle(true);
     });
   });
 }
 
 
+// ============================================================
+// PROMPT MODAL
+// ============================================================
 /**
- * Prompt Modal (input dialog)
- * ───────────────────────────
- * Returns Promise<string|null> — the entered value or null if cancelled.
+ * Promise-based input dialog.
+ * Resolves the trimmed value, or null if cancelled/dismissed.
  */
-
 export function promptModal({
-  title = 'Enter value',
-  message = '',
-  placeholder = '',
+  title        = 'Enter value',
+  message      = '',
+  placeholder  = '',
   defaultValue = '',
-  confirmText = 'Save',
-  size = 'sm'
+  confirmText  = 'Save',
+  size         = 'sm',
 } = {}) {
   return new Promise((resolve) => {
+    let resolved = false;
+    const settle = (value) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(value);
+    };
+
     const content = `
       <div class="modal-body">
         <div class="confirm-dialog" style="text-align:left;">
@@ -240,23 +356,32 @@ export function promptModal({
       </div>
     `;
 
-    const { close, element } = showModal(content, { size });
+    const { close, element } = showModal(content, {
+      size,
+      onClose: () => settle(null),
+    });
 
     const input = element.querySelector('#prompt-input');
-    setTimeout(() => input?.focus(), 100);
+
+    // Auto-focus + select existing text
+    setTimeout(() => {
+      if (!input) return;
+      input.focus();
+      input.select?.();
+    }, 100);
 
     const submit = () => {
       const value = input?.value?.trim() || '';
       close();
-      resolve(value || null);
+      settle(value || null);
     };
 
-    element.querySelector('#prompt-cancel').addEventListener('click', () => {
+    element.querySelector('#prompt-cancel')?.addEventListener('click', () => {
       close();
-      resolve(null);
+      settle(null);
     });
 
-    element.querySelector('#prompt-ok').addEventListener('click', submit);
+    element.querySelector('#prompt-ok')?.addEventListener('click', submit);
 
     input?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') submit();
@@ -265,13 +390,15 @@ export function promptModal({
 }
 
 
-// ==================== HELPERS ====================
-function escapeHtml(str) {
-  return str
-    ? String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-    : '';
+// ============================================================
+// CLEANUP (optional)
+// ============================================================
+/**
+ * Close every open modal. Useful on logout or route change.
+ */
+export function closeAllModals() {
+  Array.from(openModals).forEach((overlay) => {
+    const closeBtn = overlay.querySelector('.modal-close-btn');
+    if (closeBtn) closeBtn.click();
+  });
 }
