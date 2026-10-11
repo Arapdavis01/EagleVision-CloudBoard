@@ -4721,6 +4721,29 @@ code, pre, kbd {
 }
 .plan-badge:hover { box-shadow: var(--shadow-sm); }
 .plan-badge i { font-size: 0.65rem; }
+/* ============================================================
+   21b. SERVICE RECORD — KPI grid
+   ============================================================ */
+.service-record-kpi-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .service-record-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 700px) {
+  .service-record-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .service-record-kpi-grid { grid-template-columns: 1fr; }
+}
+
+.kpi-value-small {
+  font-size: 1rem !important;
+  font-weight: 600;
+}
 
 
 /* ============================================================
