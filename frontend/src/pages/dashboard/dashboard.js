@@ -16,7 +16,6 @@ let expiringDomains = [];
 let lastUpdatedTimer = null;
 
 export async function dashboardPage() {
-  document.body.classList.add('app-dashboard');
 
   const app = document.getElementById('app');
   app.innerHTML = `
