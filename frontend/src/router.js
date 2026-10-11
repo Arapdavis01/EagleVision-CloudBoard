@@ -26,8 +26,6 @@ import { initCustomSelects }     from './components/customSelect.js';
 import {
   APP_NAME,
   AUTH_TOKEN_KEY,
-  ROUTES,
-  FEATURES,
 } from './config/constants.js';
 
 
@@ -40,7 +38,8 @@ import {
 //   public:  true = no auth required
 // ============================================================
 const routes = {
-  '#login':            { loader: loginPage,            title: 'Sign In',              public: true },
+  '#login':            { loader: loginPage,            title: 'Sign In',              public: true  },
+  '#approve-login':    { loader: approveLoginPage,     title: 'Approve Login',        public: true  },
   '#dashboard':        { loader: dashboardPage,        title: 'Dashboard',            public: false },
   '#projects':         { loader: projectsPage,         title: 'Projects',             public: false },
   '#finance':          { loader: financePage,          title: 'Finance',              public: false },
@@ -49,10 +48,9 @@ const routes = {
   '#service-planner':  { loader: servicePlannerPage,   title: 'Service Planner',      public: false },
   '#service-record':   { loader: serviceRecordPage,    title: 'Service Record',       public: false },
   '#client-requests':  { loader: clientRequestsPage,   title: 'Client Requests',      public: false },
-  '#approve-login':    { loader: approveLoginPage,     title: 'Approve Login',        public: false },
 };
 
-const DEFAULT_ROUTE        = '#dashboard';
+const DEFAULT_ROUTE         = '#dashboard';
 const FALLBACK_PUBLIC_ROUTE = '#login';
 
 
@@ -68,13 +66,10 @@ function isAuthed() {
 }
 
 function setPageTitle(title) {
-  document.title = title
-    ? `${title} · ${APP_NAME}`
-    : APP_NAME;
+  document.title = title ? `${title} · ${APP_NAME}` : APP_NAME;
 }
 
 function setActiveNavLink(baseHash) {
-  // Sidebar links use href="#dashboard" etc — match against them
   document.querySelectorAll('.sidebar a[href^="#"], .nav-link[href^="#"]').forEach((link) => {
     const linkHash = link.getAttribute('href').split('?')[0];
     link.classList.toggle('active', linkHash === baseHash);
@@ -84,32 +79,29 @@ function setActiveNavLink(baseHash) {
 function getHash() {
   const fullHash = location.hash || DEFAULT_ROUTE;
   return {
-    full: fullHash,
-    base: fullHash.split('?')[0],
+    full:  fullHash,
+    base:  fullHash.split('?')[0],
     query: fullHash.includes('?') ? fullHash.slice(fullHash.indexOf('?')) : '',
   };
 }
 
 
 // ============================================================
-// ERROR / 404 SCREENS
+// LOADING / ERROR / 404 SCREENS
 // ============================================================
 function renderLoading() {
   const app = document.getElementById('app');
   if (!app) return;
-  // Only show loading if there's nothing rendered yet (avoid flicker)
-  if (app.children.length > 0) return;
+  if (app.children.length > 0) return; // avoid flicker if page already rendered
   app.innerHTML = `
     <div style="
       display:flex;align-items:center;justify-content:center;
       min-height:60vh;color:#8A94A6;
-      font-family:'Inter',system-ui,sans-serif;font-size:14px;
-      gap:10px;
+      font-family:'Inter',system-ui,sans-serif;font-size:14px;gap:10px;
     ">
       <span style="
         width:16px;height:16px;border:2px solid #E2E8F0;border-top-color:#16A34A;
-        border-radius:50%;display:inline-block;
-        animation:spin 0.8s linear infinite;
+        border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;
       "></span>
       Loading…
     </div>
@@ -188,20 +180,17 @@ function renderNotFound() {
 // ROUTER
 // ============================================================
 export async function initRouter() {
-  const hash = getHash();
+  const hash  = getHash();
   const route = routes[hash.base];
 
   // ---------- 1. Auth guard ----------
   if (route && !route.public && !isAuthed()) {
-    // Not logged in → send to login
-    if (hash.base !== '#login') {
-      location.hash = ROUTES.LOGIN;
-      return;
-    }
+    location.hash = FALLBACK_PUBLIC_ROUTE;
+    return;
   }
 
   // Already logged in and heading to login → send to dashboard
-  if (hash.base === ROUTES.LOGIN && isAuthed()) {
+  if (hash.base === '#login' && isAuthed()) {
     location.hash = DEFAULT_ROUTE;
     return;
   }
@@ -219,17 +208,9 @@ export async function initRouter() {
 
   try {
     await route.loader();
-
-    // Convert native <select> → custom dropdowns after render.
-    // Safe to call multiple times (should be idempotent).
     initCustomSelects();
-
-    // Sidebar active state
     setActiveNavLink(hash.base);
-
-    // Scroll to top on route change
     window.scrollTo({ top: 0, behavior: 'auto' });
-
   } catch (err) {
     setPageTitle('Error');
     renderError(err);
