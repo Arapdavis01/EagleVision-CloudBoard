@@ -21,7 +21,7 @@ import { showModal }                         from '../../components/modal.js';
 import { renderUpdateForm }                  from '../../components/updateForm.js';
 import { renderReviewUpdateForm }            from '../../components/reviewUpdateForm.js';
 import { renderProjectHealthScore }          from '../../components/projectHealthScore.js';
-import { renderCostChart }                   from '../../components/costCharts.js';
+import { renderCostChart, destroyAllCostCharts } from '../../components/costCharts.js';
 import { showToast }                         from '../../utils/notifications.js';
 import { confirmDialog }                     from '../../utils/confirm.js';
 import { escapeHtml, escapeAttr, debounce }  from '../../utils/dom.js';
@@ -788,12 +788,11 @@ export async function serviceRecordPage() {
   // CLEANUP
   // ============================================================
   registerCleanup(() => {
-    clearTimeout(chartRenderTimer);
-    chartRenderTimer = null;
-    destroyChart();
-    updatesContainer.removeEventListener('click', onUpdatesContainerClick);
-  });
-
+  clearTimeout(chartRenderTimer);
+  chartRenderTimer = null;
+  destroyAllCostCharts();   // ← handles the internal map
+  updatesContainer.removeEventListener('click', onUpdatesContainerClick);
+});
 
   // ============================================================
   // INIT
