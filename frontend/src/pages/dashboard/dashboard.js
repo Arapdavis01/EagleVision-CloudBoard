@@ -1,6 +1,12 @@
 // ============================================================
 // EAGLEVISION CLOUDBOARD — DASHBOARD PAGE
 // ============================================================
+// Fixes applied:
+//   • Revenue KPI shows $ (USD) instead of KSh
+//   • Pending Revenue card shows $ (USD)
+//   • Revenue summary modal shows $ (USD) for rows + total
+//   Requires utils/format.js to expose format.usd()
+// ============================================================
 
 import { renderSidebar, initSidebar } from '../../components/sidebar.js';
 import { dashboardService }     from '../../services/dashboardService.js';
@@ -297,7 +303,8 @@ function renderClickableKPIs(data = {}, domainsCount = 0) {
     card('overdue',  'fa-exclamation-circle', 'Overdue Reviews',   format.number(data.overdue_reviews)) +
     card('clients',  'fa-users',              'Active Clients',    format.number(data.active_clients)) +
     card('domains',  'fa-globe',              'Domains Expiring',  format.number(domainsCount)) +
-    card('revenue',  'fa-dollar-sign',        'Total Revenue',     format.currency(data.total_revenue))
+    // FIX: USD — backend sends USD
+    card('revenue',  'fa-dollar-sign',        'Total Revenue',     format.usd(data.total_revenue))
   );
 }
 
@@ -308,7 +315,7 @@ function renderPendingRevenueCard(pending) {
     <div class="card kpi-card pending-revenue-card compact-kpi">
       <i class="fas fa-hand-holding-usd kpi-icon"></i>
       <h3>Pending Revenue</h3>
-      <div class="value">${format.currency(total)}</div>
+      <div class="value">${format.usd(total)}</div>
     </div>
   `;
 }
@@ -507,7 +514,7 @@ function renderForSaleProjectsCompact(forSale = []) {
           <span class="compact-widget-label">
             <i class="fas fa-folder-open"></i> ${escapeHtml(p.name)}
           </span>
-          <span class="compact-widget-value">${format.currency(p.asking_price || 0)}</span>
+          <span class="compact-widget-value">${format.usd(p.asking_price || 0)}</span>
         </li>
       `).join('')}
     </ul>
@@ -821,7 +828,7 @@ async function showRevenueSummaryModal() {
           ${sales.map((s) => `
             <tr>
               <td>${escapeHtml(s.project_name)}</td>
-              <td>${format.currency(s.amount)}</td>
+              <td>${format.usd(s.amount)}</td>
               <td>${format.date(s.sale_date)}</td>
             </tr>
           `).join('') || '<tr><td colspan="3">No sales recorded yet.</td></tr>'}
@@ -829,7 +836,7 @@ async function showRevenueSummaryModal() {
         <tfoot>
           <tr>
             <td colspan="2" style="text-align:right;font-weight:700;">Total Revenue</td>
-            <td style="font-weight:700;">${format.currency(total)}</td>
+            <td style="font-weight:700;">${format.usd(total)}</td>
           </tr>
         </tfoot>
       </table>
