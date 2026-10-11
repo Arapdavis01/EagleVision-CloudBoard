@@ -13,7 +13,7 @@
 //   POST /api/auth/qr/session/:token/approve
 // ============================================================
 
-import { api }  from './api.js';
+import { api } from './api.js';
 import { storage } from '../utils/storage.js';
 
 
@@ -25,6 +25,17 @@ function devWarn(...args) {
   if (import.meta?.env?.DEV) {
     console.warn('[authService]', ...args);
   }
+}
+
+/**
+ * Build the local user object from the login response.
+ * Currently the backend returns { email }, so we keep it minimal.
+ * If the backend later returns a full user object, this picks it up.
+ */
+function buildUser(data) {
+  if (data?.user) return data.user;   // future-proof
+  if (data?.email) return { email: data.email };
+  return null;
 }
 
 
@@ -40,7 +51,7 @@ export const authService = {
 
   /**
    * Email/password login.
-   * Persists token (and user if provided) via the storage layer.
+   * Persists token + user (minimal) via the storage layer.
    */
   login: async (email, password) => {
     const data = await api('/api/auth/login', {
@@ -54,8 +65,9 @@ export const authService = {
 
     storage.auth.setToken(data.token);
 
-    if (data.user) {
-      storage.auth.setUser(data.user);
+    const user = buildUser(data);
+    if (user) {
+      storage.auth.setUser(user);
     }
 
     return data;
@@ -77,7 +89,7 @@ export const authService = {
 
   /**
    * Verify the current session with the server.
-   * Returns the user object, or throws if the session is invalid.
+   * Returns { authenticated: true, email } on success.
    */
   checkSession: () => api('/api/auth/session'),
 
@@ -90,6 +102,14 @@ export const authService = {
   getToken: () => storage.auth.getToken(),
 
   getCurrentUser: () => storage.auth.getUser(),
+
+  /**
+   * Convenience — returns email or null.
+   */
+  getCurrentEmail: () => {
+    const u = storage.auth.getUser();
+    return u?.email || null;
+  },
 
   /**
    * Force-clear local session without hitting the server.
