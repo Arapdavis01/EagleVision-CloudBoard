@@ -9,6 +9,7 @@
 //   GET  /api/dashboard/overdue-reviews
 //   GET  /api/dashboard/status-distribution
 //   GET  /api/dashboard/pending-revenue
+//   GET  /api/dashboard/pending-revenue-summary   ← NEW
 //   GET  /api/dashboard/county-breakdown
 //   GET  /api/dashboard/for-sale
 //   GET  /api/dashboard/projects-summary
@@ -65,6 +66,29 @@ export const dashboardService = {
   /** GET /api/dashboard/pending-revenue */
   getPendingRevenue: () =>
     api('/api/dashboard/pending-revenue'),
+
+  /**
+   * GET /api/dashboard/pending-revenue-summary
+   * Detailed list of pending sales for the pending-revenue modal.
+   *
+   * Falls back to filtering getRevenueSummary() if the backend
+   * endpoint isn't available yet, so the modal still works.
+   */
+  getPendingRevenueSummary: async () => {
+    try {
+      return await api('/api/dashboard/pending-revenue-summary');
+    } catch (_) {
+      // Fallback — derive from the full revenue summary
+      try {
+        const all = await api('/api/dashboard/revenue-summary');
+        return (all || []).filter(
+          (s) => s.is_pending === true || s.payment_status === 'pending'
+        );
+      } catch (_) {
+        return [];
+      }
+    }
+  },
 
 
   // ----------------------------------------------------------
