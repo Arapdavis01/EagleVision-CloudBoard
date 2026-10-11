@@ -1,25 +1,36 @@
-/**
- * Projects Page
- * Professional portfolio management with stats bar, filter pills,
- * debounced search, client/location dropdowns, sort, grid/list toggle
- * (persisted), review flags, empty states, and a fully redesigned
- * Quick View modal.
- */
+// ============================================================
+// EAGLEVISION CLOUDBOARD — PROJECTS PAGE
+// ============================================================
+// Features:
+//   • Stats bar with live counts, clickable to filter
+//   • Filter pills for status
+//   • Search with debounce
+//   • Client / location dropdown filters
+//   • Sort: updated, name, client
+//   • Grid / list view (persisted)
+//   • Review flags (overdue / due-soon)
+//   • Full Quick View modal
+//   • Empty states (no data vs. no match)
+// ============================================================
 
-import { renderSidebar, initSidebar } from '../../components/sidebar.js';
-import { projectService } from '../../services/projectService.js';
-import { uploadImage } from '../../services/uploadService.js';
-import { renderProjectCard } from '../../components/projectCard.js';
-import { showModal } from '../../components/modal.js';
-import { renderProjectForm } from '../../components/projectForm.js';
-import { showToast } from '../../utils/notifications.js';
-import { confirmDialog } from '../../utils/confirm.js';
+import { renderSidebar, initSidebar }  from '../../components/sidebar.js';
+import { projectService }              from '../../services/projectService.js';
+import { uploadImage }                 from '../../services/uploadService.js';
+import { renderProjectCard }           from '../../components/projectCard.js';
+import { showModal }                   from '../../components/modal.js';
+import { renderProjectForm }           from '../../components/projectForm.js';
+import { showToast }                   from '../../utils/notifications.js';
+import { confirmDialog }               from '../../utils/confirm.js';
+import { escapeHtml, escapeAttr, debounce } from '../../utils/dom.js';
+import { format }                      from '../../utils/format.js';
+import { registerCleanup }             from '../../utils/pageLifecycle.js';
+import { STORAGE_PREFIX }              from '../../config/constants.js';
 
-/* ============================================================
-   CONSTANTS
-   ============================================================ */
 
-const VIEW_STORAGE_KEY = 'ev_projects_view';
+// ============================================================
+// CONSTANTS
+// ============================================================
+const VIEW_STORAGE_KEY   = `${STORAGE_PREFIX}projects_view`;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const STATUS_ORDER = ['Live', 'Development', 'Planning', 'Maintenance', 'Archived'];
@@ -30,56 +41,44 @@ const STATS_DEFINITION = [
   { key: 'Development', label: 'Development',  icon: 'fa-code',             color: 'dev' },
   { key: 'Planning',    label: 'Planning',     icon: 'fa-drafting-compass', color: 'planning' },
   { key: 'Maintenance', label: 'Maintenance',  icon: 'fa-wrench',           color: 'maintenance' },
-  { key: 'Archived',    label: 'Archived',     icon: 'fa-box-archive',      color: 'archived' }
+  { key: 'Archived',    label: 'Archived',     icon: 'fa-box-archive',      color: 'archived' },
 ];
 
-/* ============================================================
-   HELPERS
-   ============================================================ */
 
-function escapeHtml(text) {
-  if (text === null || text === undefined) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function debounce(fn, wait) {
-  let t;
-  return function debounced(...args) {
-    clearTimeout(t);
-    t = setTimeout(() => fn.apply(this, args), wait);
-  };
-}
-
+// ============================================================
+// STORAGE HELPERS
+// ============================================================
 function readStoredView() {
   try {
     const v = localStorage.getItem(VIEW_STORAGE_KEY);
     return v === 'list' ? 'list' : 'grid';
-  } catch {
+  } catch (_) {
     return 'grid';
   }
 }
 
 function storeView(view) {
-  try { localStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch (_) { /* storage blocked — ignore */ }
 }
 
+
+// ============================================================
+// PARSERS
+// ============================================================
 function parseTech(tech) {
   if (!tech) return [];
   if (Array.isArray(tech)) return tech.filter(Boolean);
   if (typeof tech === 'string') {
-    try {
-      const parsed = JSON.parse(tech);
-      if (Array.isArray(parsed)) return parsed.filter(Boolean);
-      if (typeof parsed === 'string') return parsed.split(',').map(s => s.trim()).filter(Boolean);
-      return [];
-    } catch {
-      return tech.split(',').map(s => s.trim()).filter(Boolean);
+    const trimmed = tech.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      } catch (_) { /* fall through */ }
     }
+    return trimmed.split(',').map((s) => s.trim()).filter(Boolean);
   }
   return [];
 }
@@ -87,50 +86,33 @@ function parseTech(tech) {
 function parseTags(tags) {
   if (!tags) return [];
   if (Array.isArray(tags)) return tags.filter(Boolean);
-  if (typeof tags === 'string') return tags.split(',').map(s => s.trim()).filter(Boolean);
+  if (typeof tags === 'string') {
+    return tags.split(',').map((s) => s.trim()).filter(Boolean);
+  }
   return [];
 }
 
-function formatDateTime(dateStr) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
 
-function formatDate(dateStr) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
-}
-
+// ============================================================
+// REVIEW FLAG (shared with projectCard.js — could be extracted)
+// ============================================================
 function getReviewFlag(nextReviewDate) {
   if (!nextReviewDate) return null;
   const now = new Date();
   now.setHours(0, 0, 0, 0);
+
   const due = new Date(nextReviewDate);
-  if (isNaN(due.getTime())) return null;
+  if (Number.isNaN(due.getTime())) return null;
   due.setHours(0, 0, 0, 0);
 
-  const diffDays = Math.floor((due - now) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.floor((due - now) / 86400000);
 
   if (diffDays < 0) {
     const n = Math.abs(diffDays);
     return {
       label: n === 1 ? 'Review overdue by 1 day' : `Review overdue by ${n} days`,
       className: 'review-flag overdue',
-      icon: 'fa-exclamation-circle'
+      icon: 'fa-exclamation-circle',
     };
   }
   if (diffDays === 0) {
@@ -140,12 +122,16 @@ function getReviewFlag(nextReviewDate) {
     return {
       label: diffDays === 1 ? 'Review due tomorrow' : `Review due in ${diffDays} days`,
       className: 'review-flag due-soon',
-      icon: 'fa-clock'
+      icon: 'fa-clock',
     };
   }
   return null;
 }
 
+
+// ============================================================
+// SKELETON
+// ============================================================
 function renderSkeletonCards(count = 6) {
   return Array.from({ length: count }).map(() => `
     <div class="card project-card skeleton-card">
@@ -157,11 +143,12 @@ function renderSkeletonCards(count = 6) {
   `).join('');
 }
 
-/* ============================================================
-   QUICK VIEW — DETAIL FIELD BUILDERS
-   ============================================================ */
 
+// ============================================================
+// QUICK VIEW HELPERS
+// ============================================================
 function detailField(label, value, icon) {
+  // `value` is expected to be pre-formatted (safe HTML or escaped string)
   if (value === null || value === undefined || value === '') return '';
   return `
     <div class="detail-field">
@@ -173,7 +160,7 @@ function detailField(label, value, icon) {
 
 function detailLink(label, url, icon) {
   if (!url) return '';
-  const safe = escapeHtml(url);
+  const safe = escapeAttr(url);
   return `
     <div class="detail-field">
       <span class="detail-label"><i class="fas ${icon}"></i> ${label}</span>
@@ -182,13 +169,11 @@ function detailLink(label, url, icon) {
   `;
 }
 
-/* ============================================================
-   PAGE ENTRY
-   ============================================================ */
 
+// ============================================================
+// PAGE ENTRY
+// ============================================================
 export async function projectsPage() {
-  document.body.classList.add('app-dashboard');
-
   const app = document.getElementById('app');
   const initialView = readStoredView();
 
@@ -196,9 +181,7 @@ export async function projectsPage() {
     ${renderSidebar()}
 
     <div class="main-content">
-      <!-- ============================================================
-           HEADER
-           ============================================================ -->
+      <!-- HEADER -->
       <div class="projects-header-enhanced">
         <div class="projects-header-text">
           <div class="projects-header-title">
@@ -212,25 +195,23 @@ export async function projectsPage() {
 
         <div class="projects-header-actions">
           <div class="view-toggle" role="group" aria-label="View mode">
-            <button class="view-toggle-btn ${initialView === 'grid' ? 'active' : ''}" data-view="grid" title="Grid view" aria-label="Grid view">
+            <button type="button" class="view-toggle-btn ${initialView === 'grid' ? 'active' : ''}" data-view="grid" title="Grid view" aria-label="Grid view">
               <i class="fas fa-th-large"></i><span>Grid</span>
             </button>
-            <button class="view-toggle-btn ${initialView === 'list' ? 'active' : ''}" data-view="list" title="List view" aria-label="List view">
+            <button type="button" class="view-toggle-btn ${initialView === 'list' ? 'active' : ''}" data-view="list" title="List view" aria-label="List view">
               <i class="fas fa-list"></i><span>List</span>
             </button>
           </div>
 
-          <button id="add-project-btn" class="btn btn-primary">
+          <button id="add-project-btn" class="btn btn-primary" type="button">
             <i class="fas fa-plus"></i> Add Project
           </button>
         </div>
       </div>
 
-      <!-- ============================================================
-           STATS BAR
-           ============================================================ -->
+      <!-- STATS BAR -->
       <div class="projects-stats-bar" id="projects-stats-bar">
-        ${STATS_DEFINITION.map(s => `
+        ${STATS_DEFINITION.map((s) => `
           <button class="projects-stat-card stat-${s.color}" data-stat="${s.key}" type="button">
             <span class="projects-stat-icon"><i class="fas ${s.icon}"></i></span>
             <span class="projects-stat-value" data-stat-value="${s.key}">—</span>
@@ -239,28 +220,19 @@ export async function projectsPage() {
         `).join('')}
       </div>
 
-      <!-- ============================================================
-           FILTER PILLS
-           ============================================================ -->
+      <!-- FILTER PILLS -->
       <div class="filter-bar" id="status-filter-bar">
-        <button class="filter-pill active" data-status="all">All</button>
-        ${STATUS_ORDER.map(s => `
-          <button class="filter-pill" data-status="${s}">${s}</button>
+        <button type="button" class="filter-pill active" data-status="all">All</button>
+        ${STATUS_ORDER.map((s) => `
+          <button type="button" class="filter-pill" data-status="${s}">${s}</button>
         `).join('')}
       </div>
 
-      <!-- ============================================================
-           TOOLBAR
-           ============================================================ -->
+      <!-- TOOLBAR -->
       <div class="projects-toolbar">
         <div class="search-wrapper">
           <i class="fas fa-search"></i>
-          <input
-            type="text"
-            id="search"
-            placeholder="Search by name, client, tech, or tags..."
-            autocomplete="off"
-          />
+          <input type="text" id="search" placeholder="Search by name, client, tech, or tags..." autocomplete="off" />
         </div>
 
         <select id="client-filter" class="filter-select" aria-label="Filter by client">
@@ -285,34 +257,26 @@ export async function projectsPage() {
         </button>
       </div>
 
-      <!-- ============================================================
-           LOADING SKELETON
-           ============================================================ -->
+      <!-- LOADING SKELETON -->
       <div id="loading-skeleton" class="projects-grid">
         ${renderSkeletonCards(6)}
       </div>
 
-      <!-- ============================================================
-           PROJECTS CONTAINER
-           ============================================================ -->
+      <!-- PROJECTS CONTAINER -->
       <div id="projects-container" class="projects-grid hidden"></div>
 
-      <!-- ============================================================
-           EMPTY STATE
-           ============================================================ -->
+      <!-- EMPTY STATE -->
       <div id="empty-state" class="projects-empty-state hidden">
-        <div class="projects-empty-icon">
-          <i class="fas fa-folder-open"></i>
-        </div>
+        <div class="projects-empty-icon"><i class="fas fa-folder-open"></i></div>
         <h3 class="projects-empty-title">No projects found</h3>
         <p class="projects-empty-text" id="empty-state-text">
           Try adjusting your filters, or add your first project to get started.
         </p>
         <div class="projects-empty-cta">
-          <button class="btn btn-primary" id="empty-add-btn">
+          <button type="button" class="btn btn-primary" id="empty-add-btn">
             <i class="fas fa-plus"></i> Add Project
           </button>
-          <button class="btn btn-outline hidden" id="empty-clear-btn">
+          <button type="button" class="btn btn-outline hidden" id="empty-clear-btn">
             <i class="fas fa-times"></i> Clear Filters
           </button>
         </div>
@@ -322,21 +286,17 @@ export async function projectsPage() {
 
   initSidebar();
 
-  /* ============================================================
-     STATE
-     ============================================================ */
-  let allProjects = [];
-  let projects = [];
-  let currentView = initialView;
-  let currentStatus = 'all';
-  let currentClient = '';
+  // ---------- STATE ----------
+  let allProjects    = [];
+  let projects       = [];
+  let currentView    = initialView;
+  let currentStatus  = 'all';
+  let currentClient  = '';
   let currentLocation = '';
-  let currentSort = 'updated-desc';
-  let searchTerm = '';
+  let currentSort    = 'updated-desc';
+  let searchTerm     = '';
 
-  /* ============================================================
-     URL PARAM PRE-FILTER
-     ============================================================ */
+  // ---------- URL PARAM PRE-FILTER ----------
   const hash = location.hash.split('?')[1] || '';
   const params = new URLSearchParams(hash);
   const urlFilter = params.get('filter');
@@ -344,9 +304,7 @@ export async function projectsPage() {
   else if (urlFilter === 'clients')  currentStatus = 'all';
   else if (urlFilter === 'revenue')  { location.hash = '#finance'; return; }
 
-  /* ============================================================
-     DOM REFS
-     ============================================================ */
+  // ---------- DOM REFS ----------
   const $ = (sel) => document.querySelector(sel);
 
   const searchInput     = $('#search');
@@ -366,18 +324,16 @@ export async function projectsPage() {
 
   // Sync UI with URL-driven state
   if (currentStatus !== 'all') {
-    document.querySelectorAll('.filter-pill').forEach(p => {
+    document.querySelectorAll('.filter-pill').forEach((p) => {
       p.classList.toggle('active', p.dataset.status === currentStatus);
     });
   }
 
-  /* ============================================================
-     STATS BAR
-     ============================================================ */
+  // ---------- STATS ----------
   function computeStats(list) {
     const stats = { all: list.length };
-    STATUS_ORDER.forEach(s => { stats[s] = 0; });
-    list.forEach(p => {
+    STATUS_ORDER.forEach((s) => { stats[s] = 0; });
+    list.forEach((p) => {
       if (p.status && stats[p.status] !== undefined) stats[p.status] += 1;
     });
     return stats;
@@ -385,36 +341,36 @@ export async function projectsPage() {
 
   function updateStatsBar() {
     const stats = computeStats(allProjects);
-    statsBar.querySelectorAll('[data-stat-value]').forEach(el => {
+    statsBar.querySelectorAll('[data-stat-value]').forEach((el) => {
       const key = el.getAttribute('data-stat-value');
       el.textContent = stats[key] ?? 0;
     });
-    statsBar.querySelectorAll('.projects-stat-card').forEach(card => {
+    statsBar.querySelectorAll('.projects-stat-card').forEach((card) => {
       card.classList.toggle('active', card.dataset.stat === currentStatus);
     });
   }
 
-  /* ============================================================
-     DYNAMIC FILTERS
-     ============================================================ */
+  // ---------- DYNAMIC FILTERS ----------
   function populateDynamicFilters() {
-    const clients = new Set();
+    const clients   = new Set();
     const locations = new Set();
 
-    allProjects.forEach(p => {
-      if (p.client && p.client.trim()) clients.add(p.client.trim());
+    allProjects.forEach((p) => {
+      if (p.client   && p.client.trim())   clients.add(p.client.trim());
       if (p.location && p.location.trim()) locations.add(p.location.trim());
     });
 
     const sortAlpha = (a, b) => a.localeCompare(b);
 
     // Clients
-    const clientOptions = ['<option value="">All Clients</option>'];
-    [...clients].sort(sortAlpha).forEach(c => {
-      clientOptions.push(`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`);
-    });
-    clientFilter.innerHTML = clientOptions.join('');
-    if (currentClient && [...clients].includes(currentClient)) {
+    clientFilter.innerHTML = [
+      '<option value="">All Clients</option>',
+      ...[...clients].sort(sortAlpha).map((c) =>
+        `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`
+      ),
+    ].join('');
+
+    if (currentClient && clients.has(currentClient)) {
       clientFilter.value = currentClient;
     } else {
       currentClient = '';
@@ -422,12 +378,14 @@ export async function projectsPage() {
     }
 
     // Locations
-    const locOptions = ['<option value="">All Locations</option>'];
-    [...locations].sort(sortAlpha).forEach(l => {
-      locOptions.push(`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`);
-    });
-    locationFilter.innerHTML = locOptions.join('');
-    if (currentLocation && [...locations].includes(currentLocation)) {
+    locationFilter.innerHTML = [
+      '<option value="">All Locations</option>',
+      ...[...locations].sort(sortAlpha).map((l) =>
+        `<option value="${escapeAttr(l)}">${escapeHtml(l)}</option>`
+      ),
+    ].join('');
+
+    if (currentLocation && locations.has(currentLocation)) {
       locationFilter.value = currentLocation;
     } else {
       currentLocation = '';
@@ -435,9 +393,7 @@ export async function projectsPage() {
     }
   }
 
-  /* ============================================================
-     LOADING
-     ============================================================ */
+  // ---------- LOADING ----------
   async function loadProjects(search = '') {
     skeleton.classList.remove('hidden');
     container.classList.add('hidden');
@@ -447,7 +403,9 @@ export async function projectsPage() {
       const result = await projectService.getAll(search);
       allProjects = Array.isArray(result) ? result : [];
     } catch (err) {
-      console.error('Failed to load projects:', err);
+      if (import.meta?.env?.DEV) {
+        console.error('[projects] load failed:', err);
+      }
       showToast('Failed to load projects. Check connection.', 'error');
       allProjects = [];
     }
@@ -460,21 +418,13 @@ export async function projectsPage() {
     container.classList.remove('hidden');
   }
 
-  /* ============================================================
-     FILTER + SORT PIPELINE
-     ============================================================ */
+  // ---------- FILTER + SORT ----------
   function applyFiltersAndRender() {
     let list = [...allProjects];
 
-    if (currentStatus !== 'all') {
-      list = list.filter(p => p.status === currentStatus);
-    }
-    if (currentClient) {
-      list = list.filter(p => (p.client || '').trim() === currentClient);
-    }
-    if (currentLocation) {
-      list = list.filter(p => (p.location || '').trim() === currentLocation);
-    }
+    if (currentStatus !== 'all') list = list.filter((p) => p.status === currentStatus);
+    if (currentClient)           list = list.filter((p) => (p.client || '').trim()   === currentClient);
+    if (currentLocation)         list = list.filter((p) => (p.location || '').trim() === currentLocation);
 
     list.sort(getComparator(currentSort));
     projects = list;
@@ -500,32 +450,32 @@ export async function projectsPage() {
     const str = (v) => (v || '').toString().toLowerCase();
     const date = (v) => {
       const d = new Date(v || 0);
-      return isNaN(d.getTime()) ? 0 : d.getTime();
+      return Number.isNaN(d.getTime()) ? 0 : d.getTime();
     };
 
     switch (sortKey) {
-      case 'name-asc':    return (a, b) => str(a.name).localeCompare(str(b.name));
-      case 'name-desc':   return (a, b) => str(b.name).localeCompare(str(a.name));
-      case 'client-asc':  return (a, b) => str(a.client).localeCompare(str(b.client));
-      case 'client-desc': return (a, b) => str(b.client).localeCompare(str(a.client));
-      case 'updated-asc': return (a, b) => date(a.last_updated) - date(b.last_updated);
+      case 'name-asc':     return (a, b) => str(a.name).localeCompare(str(b.name));
+      case 'name-desc':    return (a, b) => str(b.name).localeCompare(str(a.name));
+      case 'client-asc':   return (a, b) => str(a.client).localeCompare(str(b.client));
+      case 'client-desc':  return (a, b) => str(b.client).localeCompare(str(a.client));
+      case 'updated-asc':  return (a, b) => date(a.last_updated) - date(b.last_updated);
       case 'updated-desc':
-      default:            return (a, b) => date(b.last_updated) - date(a.last_updated);
+      default:             return (a, b) => date(b.last_updated) - date(a.last_updated);
     }
   }
 
-  /* ============================================================
-     RENDER
-     ============================================================ */
+  // ---------- RENDER ----------
   function renderProjects() {
     container.className = currentView === 'grid' ? 'projects-grid' : 'projects-list';
-    container.innerHTML = projects.map(p => renderProjectCard(p, currentView)).join('');
+    container.innerHTML = projects.map((p) => renderProjectCard(p, currentView)).join('');
     container.classList.remove('hidden');
   }
 
   function renderEmptyState() {
     const filtered =
-      currentStatus !== 'all' || currentClient || currentLocation ||
+      currentStatus !== 'all' ||
+      currentClient ||
+      currentLocation ||
       (searchInput.value && searchInput.value.trim());
 
     emptyStateText.textContent = filtered
@@ -539,78 +489,55 @@ export async function projectsPage() {
     container.classList.add('hidden');
   }
 
-  /* ============================================================
-     PROJECT ACTIONS (event delegation)
-     ============================================================ */
-  container.addEventListener('click', (e) => {
+  // ---------- ACTION DELEGATION ----------
+  const onContainerClick = (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
 
-    if (btn.classList.contains('edit-project')) {
-      handleEdit(btn.dataset.id);
-    } else if (btn.classList.contains('delete-project')) {
-      handleDelete(btn.dataset.id);
-    } else if (btn.classList.contains('copy-link')) {
-      handleCopyLink(btn.dataset.token);
-    } else if (btn.classList.contains('quick-view-project')) {
-      handleQuickView(btn.dataset.id);
-    } else if (btn.classList.contains('service-record-project')) {
+    if (btn.classList.contains('edit-project'))            handleEdit(btn.dataset.id);
+    else if (btn.classList.contains('delete-project'))     handleDelete(btn.dataset.id);
+    else if (btn.classList.contains('copy-link'))          handleCopyLink(btn.dataset.token);
+    else if (btn.classList.contains('quick-view-project')) handleQuickView(btn.dataset.id);
+    else if (btn.classList.contains('service-record-project')) {
       location.hash = `#service-record?project_id=${btn.dataset.id}`;
     }
-  });
+  };
+  container.addEventListener('click', onContainerClick);
 
-  /* ============================================================
-     QUICK VIEW MODAL — Professional
-     ============================================================ */
+  // ---------- QUICK VIEW ----------
   function handleQuickView(projectId) {
-    const project = allProjects.find(p => String(p.id) === String(projectId));
+    const project = allProjects.find((p) => String(p.id) === String(projectId));
     if (!project) return showToast('Project not found', 'error');
 
-    const statusClass = (project.status || '').toLowerCase().replace(/\s+/g, '-');
+    const statusClass = (project.status || '').toLowerCase().replace(/\s+/g, '-') || 'archived';
     const techList = parseTech(project.tech_stack);
-    const tagList = parseTags(project.tags);
+    const tagList  = parseTags(project.tags);
     const reviewFlag = getReviewFlag(project.next_review_date);
 
-    const forSale =
-      project.for_sale === true ||
-      project.for_sale === 'true' ||
-      project.for_sale === 1;
+    const forSale   = isTrue(project.for_sale);
+    const autoRenew = isTrue(project.auto_renew);
 
-    const autoRenew =
-      project.auto_renew === true ||
-      project.auto_renew === 'true' ||
-      project.auto_renew === 1;
-
-    const hasDomain =
-      project.domain_name ||
-      project.registrar ||
-      project.expiry_date ||
-      autoRenew;
+    const hasDomain = project.domain_name || project.registrar || project.expiry_date || autoRenew;
 
     const techBadges = techList.length
-      ? `<div class="detail-badge-row">${techList.map(t => `<span class="tech-badge">${escapeHtml(t)}</span>`).join('')}</div>`
+      ? `<div class="detail-badge-row">${techList.map((t) => `<span class="tech-badge">${escapeHtml(t)}</span>`).join('')}</div>`
       : '';
 
     const tagBadges = tagList.length
-      ? `<div class="detail-badge-row">${tagList.map(t => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')}</div>`
+      ? `<div class="detail-badge-row">${tagList.map((t) => `<span class="tag-badge">${escapeHtml(t)}</span>`).join('')}</div>`
       : '';
 
     const content = `
       <div class="quick-view-modal">
 
-        <!-- ============================================================
-             HERO HEADER
-             ============================================================ -->
         <div class="quick-view-hero">
-          <div class="quick-view-hero-icon">
-            <i class="fas fa-folder-open"></i>
-          </div>
+          <div class="quick-view-hero-icon"><i class="fas fa-folder-open"></i></div>
           <div class="quick-view-hero-text">
             <h2 class="quick-view-hero-title">${escapeHtml(project.name) || 'Untitled Project'}</h2>
             <div class="quick-view-hero-meta">
-              ${project.client ? `<span><i class="fas fa-user"></i> ${escapeHtml(project.client)}</span>` : ''}
+              ${project.client       ? `<span><i class="fas fa-user"></i> ${escapeHtml(project.client)}</span>` : ''}
               ${project.project_type ? `<span><i class="fas fa-cube"></i> ${escapeHtml(project.project_type)}</span>` : ''}
-              ${project.location ? `<span><i class="fas fa-map-marker-alt"></i> ${escapeHtml(project.location)}</span>` : ''}
+              ${project.location     ? `<span><i class="fas fa-map-marker-alt"></i> ${escapeHtml(project.location)}</span>` : ''}
             </div>
           </div>
           <div class="quick-view-hero-badges">
@@ -625,9 +552,6 @@ export async function projectsPage() {
           </div>
         ` : ''}
 
-        <!-- ============================================================
-             CLIENT
-             ============================================================ -->
         ${(project.client || project.client_number || project.client_email) ? `
           <div class="quick-view-section">
             <div class="quick-view-section-header">
@@ -635,20 +559,13 @@ export async function projectsPage() {
               <span class="quick-view-section-title">Client</span>
             </div>
             <div class="quick-view-fields">
-              ${detailField('Name', escapeHtml(project.client), 'fa-user')}
+              ${detailField('Name',  escapeHtml(project.client), 'fa-user')}
               ${detailField('Phone', escapeHtml(project.client_number), 'fa-phone')}
-              ${detailLink(
-                'Email',
-                project.client_email ? `mailto:${escapeHtml(project.client_email)}` : '',
-                'fa-envelope'
-              )}
+              ${detailLink('Email',  project.client_email ? `mailto:${escapeAttr(project.client_email)}` : '', 'fa-envelope')}
             </div>
           </div>
         ` : ''}
 
-        <!-- ============================================================
-             DESCRIPTION
-             ============================================================ -->
         ${project.description ? `
           <div class="quick-view-section">
             <div class="quick-view-section-header">
@@ -659,9 +576,6 @@ export async function projectsPage() {
           </div>
         ` : ''}
 
-        <!-- ============================================================
-             LINKS & HOSTING
-             ============================================================ -->
         ${(project.live_url || project.github || project.hosting || project.database_host) ? `
           <div class="quick-view-section">
             <div class="quick-view-section-header">
@@ -670,16 +584,13 @@ export async function projectsPage() {
             </div>
             <div class="quick-view-fields">
               ${detailLink('Live URL', project.live_url, 'fa-globe')}
-              ${detailLink('GitHub', project.github, 'fa-code-branch')}
-              ${detailField('Hosting', escapeHtml(project.hosting), 'fa-server')}
+              ${detailLink('GitHub',   project.github,   'fa-code-branch')}
+              ${detailField('Hosting',  escapeHtml(project.hosting),       'fa-server')}
               ${detailField('Database', escapeHtml(project.database_host), 'fa-database')}
             </div>
           </div>
         ` : ''}
 
-        <!-- ============================================================
-             DOMAIN
-             ============================================================ -->
         ${hasDomain ? `
           <div class="quick-view-section">
             <div class="quick-view-section-header">
@@ -687,9 +598,9 @@ export async function projectsPage() {
               <span class="quick-view-section-title">Domain</span>
             </div>
             <div class="quick-view-fields">
-              ${detailField('Domain', escapeHtml(project.domain_name), 'fa-link')}
-              ${detailField('Registrar', escapeHtml(project.registrar), 'fa-building')}
-              ${detailField('Expiry', formatDate(project.expiry_date), 'fa-calendar-times')}
+              ${detailField('Domain',     escapeHtml(project.domain_name), 'fa-link')}
+              ${detailField('Registrar',  escapeHtml(project.registrar),   'fa-building')}
+              ${detailField('Expiry',     format.date(project.expiry_date), 'fa-calendar-times')}
               ${detailField(
                 'Auto-renew',
                 autoRenew
@@ -701,9 +612,6 @@ export async function projectsPage() {
           </div>
         ` : ''}
 
-        <!-- ============================================================
-             TECHNICAL
-             ============================================================ -->
         ${(techList.length || tagList.length) ? `
           <div class="quick-view-section">
             <div class="quick-view-section-header">
@@ -725,23 +633,17 @@ export async function projectsPage() {
           </div>
         ` : ''}
 
-        <!-- ============================================================
-             TIMELINE
-             ============================================================ -->
         <div class="quick-view-section">
           <div class="quick-view-section-header">
             <span class="quick-view-section-icon"><i class="fas fa-clock"></i></span>
             <span class="quick-view-section-title">Timeline</span>
           </div>
           <div class="quick-view-fields">
-            ${detailField('Last Updated', formatDateTime(project.last_updated), 'fa-rotate')}
-            ${detailField('Next Review', formatDate(project.next_review_date), 'fa-calendar-check')}
+            ${detailField('Last Updated', format.dateTime(project.last_updated),  'fa-rotate')}
+            ${detailField('Next Review',  format.date(project.next_review_date),  'fa-calendar-check')}
           </div>
         </div>
 
-        <!-- ============================================================
-             SALE (conditional)
-             ============================================================ -->
         ${forSale ? `
           <div class="quick-view-section quick-view-section-sale">
             <div class="quick-view-section-header">
@@ -757,7 +659,7 @@ export async function projectsPage() {
               ${detailField(
                 'Asking Price',
                 project.asking_price
-                  ? `<span class="detail-asking-price">$${Number(project.asking_price).toLocaleString()}</span>`
+                  ? `<span class="detail-asking-price">${format.currency(project.asking_price)}</span>`
                   : '—',
                 'fa-money-bill-wave'
               )}
@@ -765,17 +667,14 @@ export async function projectsPage() {
           </div>
         ` : ''}
 
-        <!-- ============================================================
-             FOOTER ACTIONS
-             ============================================================ -->
         <div class="quick-view-actions">
-          <button type="button" class="btn btn-outline quick-view-action-service" data-id="${project.id}">
+          <button type="button" class="btn btn-outline quick-view-action-service" data-id="${escapeAttr(project.id)}">
             <i class="fas fa-history"></i> Service Record
           </button>
-          <button type="button" class="btn btn-outline quick-view-action-copy" data-token="${escapeHtml(project.public_token || '')}" ${project.public_token ? '' : 'disabled'}>
+          <button type="button" class="btn btn-outline quick-view-action-copy" data-token="${escapeAttr(project.public_token || '')}" ${project.public_token ? '' : 'disabled'}>
             <i class="fas fa-link"></i> Copy Link
           </button>
-          <button type="button" class="btn btn-primary quick-view-action-edit" data-id="${project.id}">
+          <button type="button" class="btn btn-primary quick-view-action-edit" data-id="${escapeAttr(project.id)}">
             <i class="fas fa-pen"></i> Edit Project
           </button>
           <button type="button" class="btn btn-ghost quick-view-action-close">
@@ -786,37 +685,36 @@ export async function projectsPage() {
       </div>
     `;
 
-    const { close } = showModal(content);
+    const modal = showModal(content);
 
-    document.querySelector('.quick-view-action-close')?.addEventListener('click', close);
+    // Scope query to the modal element — no document-wide queries
+    modal.element.querySelector('.quick-view-action-close')?.addEventListener('click', modal.close);
 
-    document.querySelector('.quick-view-action-service')?.addEventListener('click', () => {
-      close();
+    modal.element.querySelector('.quick-view-action-service')?.addEventListener('click', () => {
+      modal.close();
       location.hash = `#service-record?project_id=${project.id}`;
     });
 
-    document.querySelector('.quick-view-action-copy')?.addEventListener('click', () => {
+    modal.element.querySelector('.quick-view-action-copy')?.addEventListener('click', () => {
       handleCopyLink(project.public_token);
     });
 
-    document.querySelector('.quick-view-action-edit')?.addEventListener('click', () => {
-      close();
+    modal.element.querySelector('.quick-view-action-edit')?.addEventListener('click', () => {
+      modal.close();
       setTimeout(() => handleEdit(project.id), 150);
     });
   }
 
-  /* ============================================================
-     EDIT
-     ============================================================ */
+  // ---------- EDIT ----------
   async function handleEdit(projectId) {
-    const project = allProjects.find(p => String(p.id) === String(projectId));
+    const project = allProjects.find((p) => String(p.id) === String(projectId));
     if (!project) return showToast('Project not found', 'error');
 
-    const { close } = showModal(renderProjectForm(project));
+    const modal = showModal(renderProjectForm(project));
     const form = document.getElementById('project-form');
     if (!form) return;
 
-    document.querySelector('.cancel-form-btn')?.addEventListener('click', () => close());
+    document.querySelector('.cancel-form-btn')?.addEventListener('click', modal.close);
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -835,12 +733,11 @@ export async function projectsPage() {
         }
       }
 
-      const formData = new FormData(form);
-      const data = Object.fromEntries(formData.entries());
+      const data = Object.fromEntries(new FormData(form).entries());
 
       try {
         await projectService.update(projectId, data);
-        close();
+        modal.close();
         await loadProjects(searchInput.value);
         showToast('Project updated', 'success');
       } catch (err) {
@@ -849,15 +746,13 @@ export async function projectsPage() {
     });
   }
 
-  /* ============================================================
-     CREATE
-     ============================================================ */
+  // ---------- CREATE ----------
   function handleCreate() {
-    const { close } = showModal(renderProjectForm());
+    const modal = showModal(renderProjectForm());
     const form = document.getElementById('project-form');
     if (!form) return;
 
-    document.querySelector('.cancel-form-btn')?.addEventListener('click', () => close());
+    document.querySelector('.cancel-form-btn')?.addEventListener('click', modal.close);
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -876,12 +771,11 @@ export async function projectsPage() {
         }
       }
 
-      const formData = new FormData(form);
-      const data = Object.fromEntries(formData.entries());
+      const data = Object.fromEntries(new FormData(form).entries());
 
       try {
         await projectService.create(data);
-        close();
+        modal.close();
         await loadProjects(searchInput.value);
         showToast('Project created', 'success');
       } catch (err) {
@@ -890,9 +784,7 @@ export async function projectsPage() {
     });
   }
 
-  /* ============================================================
-     DELETE
-     ============================================================ */
+  // ---------- DELETE ----------
   async function handleDelete(projectId) {
     const confirmed = await confirmDialog(
       'Delete this project? This action cannot be undone.',
@@ -909,24 +801,21 @@ export async function projectsPage() {
     }
   }
 
-  /* ============================================================
-     COPY LINK
-     ============================================================ */
+  // ---------- COPY LINK ----------
   function handleCopyLink(token) {
     if (!token) {
       showToast('No public link available for this project', 'error');
       return;
     }
-    const link = `${window.location.origin}/#public-status?token=${token}`;
+    const { origin, pathname } = window.location;
+    const link = `${origin}${pathname}#public-status?token=${encodeURIComponent(token)}`;
+
     navigator.clipboard.writeText(link)
       .then(() => showToast('Public link copied', 'success'))
       .catch(() => showToast('Failed to copy link', 'error'));
   }
 
-  /* ============================================================
-     CONTROLS
-     ============================================================ */
-
+  // ---------- CONTROLS ----------
   const debouncedSearch = debounce((value) => {
     searchTerm = value.trim();
     loadProjects(searchTerm);
@@ -952,7 +841,7 @@ export async function projectsPage() {
   statusFilterBar.addEventListener('click', (e) => {
     const pill = e.target.closest('.filter-pill');
     if (!pill) return;
-    statusFilterBar.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    statusFilterBar.querySelectorAll('.filter-pill').forEach((p) => p.classList.remove('active'));
     pill.classList.add('active');
     currentStatus = pill.dataset.status;
     applyFiltersAndRender();
@@ -965,20 +854,20 @@ export async function projectsPage() {
 
     currentStatus = stat;
 
-    statusFilterBar.querySelectorAll('.filter-pill').forEach(p => {
+    statusFilterBar.querySelectorAll('.filter-pill').forEach((p) => {
       p.classList.toggle('active', p.dataset.status === stat);
     });
 
     applyFiltersAndRender();
   });
 
-  document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+  document.querySelectorAll('.view-toggle-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const view = btn.dataset.view;
       if (view === currentView) return;
       currentView = view;
       storeView(view);
-      document.querySelectorAll('.view-toggle-btn').forEach(b => {
+      document.querySelectorAll('.view-toggle-btn').forEach((b) => {
         b.classList.toggle('active', b.dataset.view === view);
       });
       if (projects.length > 0) renderProjects();
@@ -992,7 +881,7 @@ export async function projectsPage() {
     searchInput.value = '';
     clientFilter.value = '';
     locationFilter.value = '';
-    statusFilterBar.querySelectorAll('.filter-pill').forEach(p => {
+    statusFilterBar.querySelectorAll('.filter-pill').forEach((p) => {
       p.classList.toggle('active', p.dataset.status === 'all');
     });
     loadProjects('');
@@ -1004,8 +893,19 @@ export async function projectsPage() {
   addProjectBtn.addEventListener('click', handleCreate);
   emptyAddBtn.addEventListener('click', handleCreate);
 
-  /* ============================================================
-     INITIAL LOAD
-     ============================================================ */
+  // ---------- CLEANUP ----------
+  registerCleanup(() => {
+    container.removeEventListener('click', onContainerClick);
+  });
+
+  // ---------- INITIAL LOAD ----------
   await loadProjects();
+}
+
+
+// ============================================================
+// INTERNAL HELPERS
+// ============================================================
+function isTrue(v) {
+  return v === true || v === 'true' || v === 1 || v === '1';
 }
