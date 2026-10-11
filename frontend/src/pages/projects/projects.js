@@ -94,7 +94,7 @@ function parseTags(tags) {
 
 
 // ============================================================
-// REVIEW FLAG (shared with projectCard.js — could be extracted)
+// REVIEW FLAG
 // ============================================================
 function getReviewFlag(nextReviewDate) {
   if (!nextReviewDate) return null;
@@ -148,7 +148,6 @@ function renderSkeletonCards(count = 6) {
 // QUICK VIEW HELPERS
 // ============================================================
 function detailField(label, value, icon) {
-  // `value` is expected to be pre-formatted (safe HTML or escaped string)
   if (value === null || value === undefined || value === '') return '';
   return `
     <div class="detail-field">
@@ -659,7 +658,7 @@ export async function projectsPage() {
               ${detailField(
                 'Asking Price',
                 project.asking_price
-                  ? `<span class="detail-asking-price">${format.currency(project.asking_price)}</span>`
+                  ? `<span class="detail-asking-price">${format.usd(project.asking_price)}</span>`
                   : '—',
                 'fa-money-bill-wave'
               )}
@@ -687,7 +686,6 @@ export async function projectsPage() {
 
     const modal = showModal(content);
 
-    // Scope query to the modal element — no document-wide queries
     modal.element.querySelector('.quick-view-action-close')?.addEventListener('click', modal.close);
 
     modal.element.querySelector('.quick-view-action-service')?.addEventListener('click', () => {
