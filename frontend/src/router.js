@@ -1,68 +1,71 @@
 // ============================================================
 // EAGLEVISION CLOUDBOARD — HASH ROUTER
 // ============================================================
-// Handles:
-//   • Hash-based navigation (#dashboard, #projects, etc.)
-//   • Auth guard (redirect to #login if no token)
-//   • Redirect authed users away from #login
+// Features:
+//   • Hash-based navigation with auth guard
+//   • Uses authService (not raw localStorage)
+//   • Redirects authed users away from #login
 //   • Per-route page titles
 //   • Scroll-to-top on navigation
 //   • Loading state during page boot
-//   • Friendly 404 for unknown routes
+//   • Friendly 404 + error screens
+//   • Handles 'ev:session-expired' emitted by api.js
+//   • Manages page-level body classes
 // ============================================================
 
-import { loginPage }             from './pages/login/login.js';
-import { dashboardPage }         from './pages/dashboard/dashboard.js';
-import { projectsPage }          from './pages/projects/projects.js';
-import { financePage }           from './pages/finance/finance.js';
-import { alertsPage }            from './pages/alerts/alerts.js';
-import { showcasePage }          from './pages/showcase/showcase.js';
-import { serviceRecordPage }     from './pages/serviceRecord/serviceRecord.js';
-import { servicePlannerPage }    from './pages/servicePlanner/servicePlanner.js';
-import { clientRequestsPage }    from './pages/clientRequests/clientRequests.js';
-import { approveLoginPage }      from './pages/approveLogin/approveLogin.js';
-import { initCustomSelects }     from './components/customSelect.js';
+import { loginPage }          from './pages/login/login.js';
+import { dashboardPage }      from './pages/dashboard/dashboard.js';
+import { projectsPage }       from './pages/projects/projects.js';
+import { financePage }        from './pages/finance/finance.js';
+import { alertsPage }         from './pages/alerts/alerts.js';
+import { showcasePage }       from './pages/showcase/showcase.js';
+import { serviceRecordPage }  from './pages/serviceRecord/serviceRecord.js';
+import { servicePlannerPage } from './pages/servicePlanner/servicePlanner.js';
+import { clientRequestsPage } from './pages/clientRequests/clientRequests.js';
+import { approveLoginPage }   from './pages/approveLogin/approveLogin.js';
+import { initCustomSelects }  from './components/customSelect.js';
 
+import { authService }        from './services/authService.js';
 import {
   APP_NAME,
-  AUTH_TOKEN_KEY,
+  ROUTES,
+  PUBLIC_ROUTES,
+  AUTH,
 } from './config/constants.js';
 
 
 // ============================================================
 // ROUTE TABLE
 // ============================================================
-// Each entry:
-//   loader:  async function that renders the page
-//   title:   string shown in the browser tab
-//   public:  true = no auth required
-// ============================================================
 const routes = {
-  '#login':            { loader: loginPage,            title: 'Sign In',              public: true  },
-  '#approve-login':    { loader: approveLoginPage,     title: 'Approve Login',        public: true  },
-  '#dashboard':        { loader: dashboardPage,        title: 'Dashboard',            public: false },
-  '#projects':         { loader: projectsPage,         title: 'Projects',             public: false },
-  '#finance':          { loader: financePage,          title: 'Finance',              public: false },
-  '#alerts':           { loader: alertsPage,           title: 'Alerts',               public: false },
-  '#showcase':         { loader: showcasePage,         title: 'Showcase',             public: false },
-  '#service-planner':  { loader: servicePlannerPage,   title: 'Service Planner',      public: false },
-  '#service-record':   { loader: serviceRecordPage,    title: 'Service Record',       public: false },
-  '#client-requests':  { loader: clientRequestsPage,   title: 'Client Requests',      public: false },
+  [ROUTES.LOGIN]:           { loader: loginPage,          title: 'Sign In' },
+  [ROUTES.APPROVE_LOGIN]:   { loader: approveLoginPage,   title: 'Approve Login' },
+  [ROUTES.DASHBOARD]:       { loader: dashboardPage,      title: 'Dashboard' },
+  [ROUTES.PROJECTS]:        { loader: projectsPage,       title: 'Projects' },
+  [ROUTES.FINANCE]:         { loader: financePage,        title: 'Finance' },
+  [ROUTES.ALERTS]:          { loader: alertsPage,         title: 'Alerts' },
+  [ROUTES.SHOWCASE]:        { loader: showcasePage,       title: 'Showcase' },
+  [ROUTES.SERVICE_PLANNER]: { loader: servicePlannerPage, title: 'Service Planner' },
+  [ROUTES.SERVICE_RECORD]:  { loader: serviceRecordPage,  title: 'Service Record' },
+  [ROUTES.CLIENT_REQUESTS]: { loader: clientRequestsPage, title: 'Client Requests' },
 };
 
-const DEFAULT_ROUTE         = '#dashboard';
-const FALLBACK_PUBLIC_ROUTE = '#login';
+const DEFAULT_ROUTE = ROUTES.DASHBOARD;
+
+// Page-specific body classes (added to <body> while that route is active)
+const PAGE_BODY_CLASSES = {
+  [ROUTES.DASHBOARD]: 'page-dashboard',
+  [ROUTES.PROJECTS]:  'page-projects',
+  [ROUTES.FINANCE]:   'page-finance',
+  // add more as needed
+};
 
 
 // ============================================================
 // HELPERS
 // ============================================================
-function isAuthed() {
-  try {
-    return Boolean(localStorage.getItem(AUTH_TOKEN_KEY));
-  } catch (_) {
-    return false;
-  }
+function isPublic(route) {
+  return PUBLIC_ROUTES.includes(route);
 }
 
 function setPageTitle(title) {
@@ -74,6 +77,16 @@ function setActiveNavLink(baseHash) {
     const linkHash = link.getAttribute('href').split('?')[0];
     link.classList.toggle('active', linkHash === baseHash);
   });
+}
+
+function setPageBodyClass(baseHash) {
+  // Remove all known page classes first
+  Object.values(PAGE_BODY_CLASSES).forEach((cls) => {
+    document.body.classList.remove(cls);
+  });
+  // Add the one for the current route
+  const cls = PAGE_BODY_CLASSES[baseHash];
+  if (cls) document.body.classList.add(cls);
 }
 
 function getHash() {
@@ -92,7 +105,7 @@ function getHash() {
 function renderLoading() {
   const app = document.getElementById('app');
   if (!app) return;
-  if (app.children.length > 0) return; // avoid flicker if page already rendered
+  if (app.children.length > 0) return;
   app.innerHTML = `
     <div style="
       display:flex;align-items:center;justify-content:center;
@@ -137,7 +150,7 @@ function renderError(err) {
           border:1px solid rgba(15,23,42,0.12);border-radius:100px;
           font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;
         ">Reload</button>
-        <a href="#dashboard" style="
+        <a href="${ROUTES.DASHBOARD}" style="
           padding:10px 20px;background:#16A34A;color:#FFFFFF;
           border:1px solid #16A34A;border-radius:100px;
           font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;
@@ -166,7 +179,7 @@ function renderNotFound() {
       <p style="font-size:15px;line-height:1.6;color:#475569;margin:0 0 20px;">
         The page you're looking for doesn't exist or has been moved.
       </p>
-      <a href="#dashboard" style="
+      <a href="${ROUTES.DASHBOARD}" style="
         display:inline-block;padding:10px 20px;background:#16A34A;color:#FFFFFF;
         border-radius:100px;font-family:'Space Grotesk',sans-serif;font-weight:600;
         font-size:14px;text-decoration:none;
@@ -177,6 +190,21 @@ function renderNotFound() {
 
 
 // ============================================================
+// IDLE CHECK
+// ============================================================
+function enforceIdleTimeout() {
+  if (!AUTH.IDLE_TIMEOUT_MS) return;
+  if (storage.auth.isIdle()) {
+    storage.auth.clearAll();
+    window.dispatchEvent(new CustomEvent('ev:session-expired'));
+  }
+}
+
+// Local import to avoid a top-level import conflict with storage.js
+import { storage } from './utils/storage.js';
+
+
+// ============================================================
 // ROUTER
 // ============================================================
 export async function initRouter() {
@@ -184,26 +212,31 @@ export async function initRouter() {
   const route = routes[hash.base];
 
   // ---------- 1. Auth guard ----------
-  if (route && !route.public && !isAuthed()) {
-    location.hash = FALLBACK_PUBLIC_ROUTE;
+  if (route && !isPublic(hash.base) && !authService.isAuthenticated()) {
+    location.hash = AUTH.LOGIN_ROUTE;
     return;
   }
 
   // Already logged in and heading to login → send to dashboard
-  if (hash.base === '#login' && isAuthed()) {
+  if (hash.base === ROUTES.LOGIN && authService.isAuthenticated()) {
     location.hash = DEFAULT_ROUTE;
     return;
   }
 
-  // ---------- 2. Unknown route → 404 ----------
+  // ---------- 2. Idle check ----------
+  enforceIdleTimeout();
+
+  // ---------- 3. Unknown route → 404 ----------
   if (!route) {
     setPageTitle('Not Found');
+    setPageBodyClass('');
     renderNotFound();
     return;
   }
 
-  // ---------- 3. Load page ----------
+  // ---------- 4. Load page ----------
   setPageTitle(route.title);
+  setPageBodyClass(hash.base);
   renderLoading();
 
   try {
@@ -216,6 +249,16 @@ export async function initRouter() {
     renderError(err);
   }
 }
+
+
+// ============================================================
+// SESSION-EXPIRED LISTENER
+// ============================================================
+window.addEventListener('ev:session-expired', () => {
+  if (location.hash !== ROUTES.LOGIN) {
+    location.hash = ROUTES.LOGIN;
+  }
+});
 
 
 // ============================================================
