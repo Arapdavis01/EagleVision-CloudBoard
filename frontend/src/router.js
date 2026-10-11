@@ -11,7 +11,8 @@
 //   • Friendly 404 + error screens
 //   • Runs page cleanups before route change
 //   • Manages page-level body classes
-//   • Enforces idle timeout
+//   • Enforces idle timeout (gated by FEATURES.idleLogout)
+//   • Skips loading spinner on same-page query changes
 // ============================================================
 
 import { loginPage }          from './pages/login/login.js';
@@ -24,6 +25,7 @@ import { serviceRecordPage }  from './pages/serviceRecord/serviceRecord.js';
 import { servicePlannerPage } from './pages/servicePlanner/servicePlanner.js';
 import { clientRequestsPage } from './pages/clientRequests/clientRequests.js';
 import { approveLoginPage }   from './pages/approveLogin/approveLogin.js';
+import { publicStatusPage }   from './pages/public-status/public.js';
 import { initCustomSelects }  from './components/customSelect.js';
 
 import { authService }        from './services/authService.js';
@@ -34,6 +36,7 @@ import {
   ROUTES,
   PUBLIC_ROUTES,
   AUTH,
+  FEATURES,
 } from './config/constants.js';
 
 
@@ -52,6 +55,14 @@ const routes = {
   [ROUTES.SERVICE_RECORD]:  { loader: serviceRecordPage,  title: 'Service Record' },
   [ROUTES.CLIENT_REQUESTS]: { loader: clientRequestsPage, title: 'Client Requests' },
 };
+
+// Public status page — gated by FEATURES.publicStatus
+if (FEATURES.publicStatus) {
+  routes[ROUTES.PUBLIC_STATUS] = {
+    loader: publicStatusPage,
+    title: 'Project Status',
+  };
+}
 
 const DEFAULT_ROUTE = ROUTES.DASHBOARD;
 
@@ -101,6 +112,19 @@ function getHash() {
     base:  fullHash.split('?')[0],
     query: fullHash.includes('?') ? fullHash.slice(fullHash.indexOf('?')) : '',
   };
+}
+
+
+// ============================================================
+// PREVIOUS ROUTE TRACKING
+// ============================================================
+// Used to skip the loading spinner when navigating within the
+// same page (e.g., #finance?section=revenue → #finance?section=expenses)
+// ============================================================
+let previousBase = '';
+
+function isSamePageNav(currentBase) {
+  return previousBase === currentBase;
 }
 
 
@@ -198,11 +222,12 @@ function renderNotFound() {
 // IDLE CHECK
 // ============================================================
 function enforceIdleTimeout() {
+  if (!FEATURES.idleLogout) return;                    // ← honor feature flag
   if (!AUTH.IDLE_TIMEOUT_MS) return;
   if (!authService.isAuthenticated()) return;
+
   if (storage.auth.isIdle()) {
     storage.auth.clearAll();
-    // Navigate directly instead of relying on an external listener
     if (location.hash !== ROUTES.LOGIN) {
       location.hash = ROUTES.LOGIN;
     }
@@ -219,7 +244,7 @@ export async function initRouter() {
 
   // ---------- 1. Auth guard ----------
   if (route && !isPublic(hash.base) && !authService.isAuthenticated()) {
-    location.hash = AUTH.LOGIN_ROUTE;
+    location.hash = ROUTES.LOGIN;
     return;
   }
 
@@ -239,32 +264,39 @@ export async function initRouter() {
     setPageTitle('Not Found');
     setPageBodyClass('');
     renderNotFound();
+    previousBase = hash.base;
     return;
   }
 
   // ---------- 4. Clean up previous page ----------
-  // Runs before loading the new page: kills charts, timers,
-  // intervals, global listeners registered by the old page.
-  runCleanups();
+  // Skip cleanup if it's the same page (query change only) —
+  // the loader will handle its own re-render.
+  const samePage = isSamePageNav(hash.base);
+  if (!samePage) {
+    runCleanups();
+  }
 
   // ---------- 5. Load page ----------
   setPageTitle(route.title);
   setPageBodyClass(hash.base);
 
-  // If the hash has a query, we're likely doing a same-page nav
-  // (e.g. #finance?section=revenue). Skip the loading screen in that
-  // case — it would flash needlessly. Otherwise show it.
-  const samePageNav = false; // future: track previous base
-  renderLoading(!samePageNav);
+  // Only show loading spinner when switching to a *different* page.
+  // Same-page query changes (e.g. #finance?section=…) skip it to
+  // avoid a needless flash.
+  renderLoading(!samePage);
 
   try {
     await route.loader();
     initCustomSelects();
     setActiveNavLink(hash.base);
     window.scrollTo({ top: 0, behavior: 'auto' });
+
+    // Track the route we just loaded
+    previousBase = hash.base;
   } catch (err) {
     setPageTitle('Error');
     renderError(err);
+    previousBase = hash.base;
   }
 }
 
