@@ -5,6 +5,7 @@
 //
 // Features:
 //   • Auto-attaches Bearer token from storage
+//   • Auto-detects FormData — skips JSON Content-Type header
 //   • Request timeout with AbortController
 //   • Normalized error messages
 //   • Emits 'ev:session-expired' on 401 (router handles redirect)
@@ -16,6 +17,14 @@
 //   const created = await api('/api/projects', {
 //     method: 'POST',
 //     body: JSON.stringify({ name: 'New project' }),
+//   });
+//
+//   // File upload — Content-Type is set automatically:
+//   const formData = new FormData();
+//   formData.append('file', file);
+//   const result = await api('/api/upload', {
+//     method: 'POST',
+//     body: formData,
 //   });
 // ============================================================
 
@@ -97,8 +106,16 @@ function extractErrorMessage(data, status) {
 export async function api(endpoint, options = {}) {
   // ---------- Auth header ----------
   const token = storage.auth.getToken();
+
+  // ---------- Detect FormData ----------
+  // When the body is FormData, the browser MUST set Content-Type
+  // itself (it adds the multipart boundary). Setting it manually
+  // breaks the upload.
+  const isFormData = typeof FormData !== 'undefined'
+    && options.body instanceof FormData;
+
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   };
 
@@ -113,7 +130,7 @@ export async function api(endpoint, options = {}) {
 
   // ---------- Config ----------
   const config = {
-    credentials: 'include',       // keep — harmless, useful if you ever use cookies
+    credentials: 'include',
     headers,
     signal: controller.signal,
     ...options,
@@ -130,7 +147,6 @@ export async function api(endpoint, options = {}) {
 
     // ----- 401 Unauthorized -----
     if (response.status === 401) {
-      // Don't redirect if we're already on the login page
       const onLoginPage = window.location.hash.startsWith(ROUTES.LOGIN);
 
       if (!onLoginPage) {
@@ -138,7 +154,7 @@ export async function api(endpoint, options = {}) {
         emitSessionExpired();
         throw new Error('Session expired. Please sign in again.');
       }
-      // If we're on login, let the login flow surface the error
+      // On login page — let the login flow surface the error
       const data = await response.json().catch(() => null);
       throw new Error(extractErrorMessage(data, 401));
     }
@@ -155,7 +171,6 @@ export async function api(endpoint, options = {}) {
     }
 
     // ----- Success -----
-    // Guard against empty bodies on 200/201
     const text = await response.text();
     if (!text) return null;
     try {
@@ -187,10 +202,6 @@ export async function api(endpoint, options = {}) {
 // ============================================================
 // CONVENIENCE SHORTCUTS
 // ============================================================
-// Optional — lets you write `api.get('/api/projects')` instead of
-// `api('/api/projects', { method: 'GET' })`.
-// Safe to add without breaking existing callers.
-// ============================================================
 
 api.get = (endpoint, options = {}) =>
   api(endpoint, { ...options, method: 'GET' });
@@ -199,21 +210,27 @@ api.post = (endpoint, body, options = {}) =>
   api(endpoint, {
     ...options,
     method: 'POST',
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined
+      ? (body instanceof FormData ? body : JSON.stringify(body))
+      : undefined,
   });
 
 api.put = (endpoint, body, options = {}) =>
   api(endpoint, {
     ...options,
     method: 'PUT',
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined
+      ? (body instanceof FormData ? body : JSON.stringify(body))
+      : undefined,
   });
 
 api.patch = (endpoint, body, options = {}) =>
   api(endpoint, {
     ...options,
     method: 'PATCH',
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined
+      ? (body instanceof FormData ? body : JSON.stringify(body))
+      : undefined,
   });
 
 api.delete = (endpoint, options = {}) =>
