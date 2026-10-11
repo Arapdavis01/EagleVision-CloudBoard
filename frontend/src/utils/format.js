@@ -12,28 +12,43 @@ import { CURRENCY } from '../config/constants.js';
 // ============================================================
 
 /**
- * Format a number as KES currency.
- *   formatCurrency(1500)        → "KSh 1,500"
- *   formatCurrency(1500, {compact:true}) → "KSh 1.5K"
- *   formatCurrency(null)        → "—"
+ * Format a number as a currency string.
+ *
+ * @param {number} value
+ * @param {object} [opts]
+ * @param {string} [opts.currency]  'KES' | 'USD' — overrides the app default
+ * @param {boolean} [opts.compact]  Use compact notation (1.5K, 2M)
+ * @returns {string}
+ *
+ *   formatCurrency(1500)                      → "KSh 1,500"
+ *   formatCurrency(1500, { currency: 'USD' }) → "$1,500"
+ *   formatCurrency(1500, { compact: true })   → "KSh 1.5K"
  */
 export function formatCurrency(value, opts = {}) {
   if (value === null || value === undefined || value === '') return '—';
   const num = Number(value);
   if (!Number.isFinite(num)) return '—';
 
+  // ---------- Pick the currency preset ----------
+  const CURRENCY_PRESETS = {
+    KES: { symbol: 'KSh', locale: 'en-KE' },
+    USD: { symbol: '$',   locale: 'en-US' },
+  };
+
+  const preset = CURRENCY_PRESETS[opts.currency] || CURRENCY;
+
   if (opts.compact) {
-    return `${CURRENCY.symbol} ${formatCompact(num)}`;
+    return `${preset.symbol} ${formatCompact(num)}`;
   }
 
   try {
-    const formatted = new Intl.NumberFormat(CURRENCY.locale, {
+    const formatted = new Intl.NumberFormat(preset.locale, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     }).format(num);
-    return `${CURRENCY.symbol} ${formatted}`;
+    return `${preset.symbol} ${formatted}`;
   } catch (_) {
-    return `${CURRENCY.symbol} ${num.toLocaleString()}`;
+    return `${preset.symbol} ${num.toLocaleString()}`;
   }
 }
 
@@ -270,6 +285,8 @@ export function initials(name) {
 // ============================================================
 export const format = {
   currency:     formatCurrency,
+  usd:          (v, opts = {}) => formatCurrency(v, { ...opts, currency: 'USD' }),
+  kes:          (v, opts = {}) => formatCurrency(v, { ...opts, currency: 'KES' }),
   number:       formatNumber,
   compact:      formatCompact,
   percent:      formatPercent,
