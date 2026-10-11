@@ -33,12 +33,12 @@ export const APP_VERSION = '1.0.0';
 // ============================================================
 // 03. STORAGE
 // ============================================================
-// Every key written to localStorage is prefixed with this.
+// Every key written to localStorage is prefixed with STORAGE_PREFIX.
 // Prevents collisions with other apps on the same origin.
 // ============================================================
 export const STORAGE_PREFIX = 'ev:';
 
-// Current schema version. Bump to force-clear stale sessions.
+// Bump to force-clear stale sessions on next boot.
 export const STORAGE_VERSION = 1;
 
 // Storage keys (WITHOUT prefix — storage.js adds it)
@@ -54,31 +54,7 @@ export const STORAGE_KEYS = {
 
 
 // ============================================================
-// 04. AUTH
-// ============================================================
-export const AUTH = {
-  // Idle timeout — user is auto-logged-out after this long with no activity
-  IDLE_TIMEOUT_MS: 1000 * 60 * 30,   // 30 minutes
-
-  // Absolute session limit — even with activity, re-login after this
-  SESSION_MAX_MS:  1000 * 60 * 60 * 8,   // 8 hours
-
-  // Roles — extend as needed
-  ROLES: {
-    ADMIN:  'admin',
-    USER:   'user',
-    VIEWER: 'viewer',
-  },
-
-  // Where to send users after login/logout
-  LOGIN_ROUTE:  '#login',
-  LOGOUT_ROUTE: '#login',
-  HOME_ROUTE:   '#dashboard',
-};
-
-
-// ============================================================
-// 05. ROUTES
+// 04. ROUTES
 // ============================================================
 // Hash-based routes. Prefix '#' for consistency with location.hash.
 // ============================================================
@@ -100,7 +76,32 @@ export const ROUTES = {
 export const PUBLIC_ROUTES = [
   ROUTES.LOGIN,
   ROUTES.APPROVE_LOGIN,
+  ROUTES.PUBLIC_STATUS,   // ← FIX: was missing
 ];
+
+
+// ============================================================
+// 05. AUTH
+// ============================================================
+export const AUTH = {
+  // Idle timeout — user is auto-logged-out after this long with no activity
+  IDLE_TIMEOUT_MS: 1000 * 60 * 30,   // 30 minutes
+
+  // Absolute session limit — even with activity, re-login after this
+  SESSION_MAX_MS:  1000 * 60 * 60 * 8,   // 8 hours
+
+  // Roles — extend as needed
+  ROLES: {
+    ADMIN:  'admin',
+    USER:   'user',
+    VIEWER: 'viewer',
+  },
+
+  // Route aliases — kept for readability. Prefer ROUTES.* in new code.
+  LOGIN_ROUTE:  ROUTES.LOGIN,       // ← FIX: aliased to ROUTES
+  LOGOUT_ROUTE: ROUTES.LOGIN,       // ← FIX: aliased to ROUTES
+  HOME_ROUTE:   ROUTES.DASHBOARD,   // ← FIX: aliased to ROUTES
+};
 
 
 // ============================================================
@@ -120,16 +121,16 @@ export const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 // 08. CHART COLORS — aligned with the light theme in main.css
 // ============================================================
 export const CHART_COLORS = {
-  primary: '#16A34A',                   // Forest green (brand)
-  gold:    '#A67C3E',                   // Warm gold (accent)
-  cyan:    '#0284C7',                   // Info blue
-  warning: '#EA580C',                   // Warning orange
-  error:   '#DC2626',                   // Error red
-  info:    '#7C3AED',                   // Purple info
-  muted:   '#8A94A6',                   // Muted grey
-  grid:    'rgba(15, 23, 42, 0.06)',    // Chart gridlines
-  text:    '#475569',                   // Chart labels
-  surface: '#FFFFFF',                   // Chart background
+  primary: '#16A34A',
+  gold:    '#A67C3E',
+  cyan:    '#0284C7',
+  warning: '#EA580C',
+  error:   '#DC2626',
+  info:    '#7C3AED',
+  muted:   '#8A94A6',
+  grid:    'rgba(15, 23, 42, 0.06)',
+  text:    '#475569',
+  surface: '#FFFFFF',
 };
 
 // Multi-series palette
@@ -168,7 +169,8 @@ export const CHART_DEFAULTS = {
       padding: 12,
       cornerRadius: 8,
       displayColors: true,
-      titleFont: { family: "'Space Grotesk', sans-serif", weight: '600', size: 13 },
+      // FIX: numeric weight for consistency
+      titleFont: { family: "'Space Grotesk', sans-serif", weight: 600, size: 13 },
       bodyFont:  { family: "'Inter', sans-serif", size: 12 },
     },
   },
@@ -215,11 +217,12 @@ export const REQUEST_STATUS = {
   completed: { label: 'Completed', color: '#0284C7' },
 };
 
+// FIX: underscore keys to match backend + pages
 export const PLAN_STATUS = {
-  'planned':     { label: 'Planned',     color: '#0284C7' },
-  'in-progress': { label: 'In Progress', color: '#7C3AED' },
-  'completed':   { label: 'Completed',   color: '#16A34A' },
-  'cancelled':   { label: 'Cancelled',   color: '#8A94A6' },
+  planned:     { label: 'Planned',     color: '#0284C7' },
+  in_progress: { label: 'In Progress', color: '#7C3AED' },
+  completed:   { label: 'Completed',   color: '#16A34A' },
+  cancelled:   { label: 'Cancelled',   color: '#8A94A6' },
 };
 
 
@@ -249,11 +252,11 @@ export const MODAL_ANIMATION_MS = 300;
 // 12. FEATURE FLAGS
 // ============================================================
 export const FEATURES = {
-  themeToggle:   false,   // flip to true to enable light/dark switch
-  kanbanDrag:    true,
-  bulkActions:   true,
-  exportPdf:     false,
-  publicStatus:  true,
+  themeToggle:   false,   // enable light/dark switch in sidebar
+  kanbanDrag:    true,    // enable drag-and-drop in kanban
+  bulkActions:   true,    // enable bulk select in service planner
+  exportPdf:     false,   // reserved — PDF export
+  publicStatus:  true,    // enable #public-status route
   idleLogout:    true,    // auto-logout on inactivity
-  debugConsole:  true,    // expose window.EV in dev mode
+  debugConsole:  false,   // expose window.EV in dev mode
 };
