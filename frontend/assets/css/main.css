@@ -6514,90 +6514,326 @@ body.page-dashboard .main-content {
 
 /* ============================================================
    34. RESPONSIVE BREAKPOINTS
+   ============================================================
+   Ordering: widest → narrowest so narrower rules override.
+
+   Coverage:
+     • 1100px — tablets landscape
+     • 900px  — tablets portrait
+     • 700px  — mobile landscape / small tablets
+     • 480px  — mobile portrait
+     • hover:none — touch device tweaks
    ============================================================ */
+
+
+/* ------------------------------------------------------------
+   1100px — Tablet landscape
+   ------------------------------------------------------------ */
 @media (max-width: 1100px) {
-  .kanban-board { grid-template-columns: repeat(2, 1fr); }
-  .dashboard-row { grid-template-columns: 1fr; }
-  .chart-review-row { grid-template-columns: 1fr; }
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .kanban-board        { grid-template-columns: repeat(2, 1fr); }
+  .dashboard-row       { grid-template-columns: 1fr; }
+  .chart-review-row    { grid-template-columns: 1fr; }
+  .kpi-grid            { grid-template-columns: repeat(2, 1fr); }
+  .compact-stats       { grid-template-columns: repeat(2, 1fr); }
+  .projects-toolbar    { gap: 0.5rem; }
 }
 
+
+/* ------------------------------------------------------------
+   900px — Tablet portrait
+   ------------------------------------------------------------ */
 @media (max-width: 900px) {
-  .sidebar { width: 220px; padding: 1.2rem 0.8rem; }
-  .main-content { padding: 1.5rem; }
+  /* Layout */
+  .sidebar        { width: 220px; padding: 1.2rem 0.8rem; }
+  .main-content   { padding: 1.5rem; }
   .compact-dashboard { padding: 1rem 1.2rem; }
-  .dashboard-grid { grid-template-columns: 1fr; }
-  .showcase-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-  .projects-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-  .plans-grid { grid-template-columns: 1fr; }
+
+  /* Dashboard */
+  .dashboard-grid         { grid-template-columns: 1fr; }
+  .dashboard-widgets-grid { grid-template-columns: 1fr; }
+
+  /* Grids */
+  .showcase-grid  { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .projects-grid  { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .plans-grid     { grid-template-columns: 1fr; }
+  .requests-list  { grid-template-columns: 1fr; }
+
+  /* Projects stats bar — 3 columns */
+  .projects-stats-bar { grid-template-columns: repeat(3, 1fr); }
+
+  /* Charts */
   .chart-container canvas { max-height: 260px; }
-  .chart-card canvas { max-height: 200px; }
-  .compact-chart canvas { max-height: 180px; }
+  .chart-card canvas      { max-height: 200px; }
+  .compact-chart canvas   { max-height: 180px; }
+
+  /* Quick view modal — collapse 2-col to 1-col */
+  .quick-view-fields { grid-template-columns: 1fr; }
 }
 
+
+/* ------------------------------------------------------------
+   700px — Mobile landscape / small tablets
+   ------------------------------------------------------------ */
 @media (max-width: 700px) {
+  /* Page headers — stack */
   .dashboard-header,
   .projects-header,
   .service-planner-header,
   .service-record-header,
   .showcase-header,
   .finance-header,
-  .alerts-header { flex-direction: column; align-items: flex-start; }
+  .alerts-header,
+  .requests-header,
+  .projects-header-enhanced {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
+  /* Planner */
   .planner-stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .planner-toolbar { flex-direction: column; align-items: stretch; }
+  .planner-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
   .search-wrapper { min-width: auto; }
-  .filter-select { min-width: auto; }
+  .filter-select  { min-width: auto; }
 
+  /* Projects toolbar — stack */
+  .projects-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .projects-toolbar .search-wrapper,
+  .projects-toolbar .filter-select,
+  .projects-toolbar #clear-filters-btn {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  /* Projects stats — 2 columns */
+  .projects-stats-bar { grid-template-columns: repeat(2, 1fr); }
+
+  /* View toggle — icon only */
+  .view-toggle-btn span { display: none; }
+  .view-toggle-btn      { padding: 0.5rem 0.7rem; }
+
+  /* Project list row — stack meta */
+  .project-list-row .list-row-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .project-actions.compact {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  /* Requests — 2 columns for stats, stacked list */
+  .requests-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .requests-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Kanban */
   .kanban-board { grid-template-columns: 1fr; }
 
-  .plan-list-item { grid-template-columns: auto 1fr; gap: 0.6rem; }
+  /* Plan list */
+  .plan-list-item      { grid-template-columns: auto 1fr; gap: 0.6rem; }
   .list-item-status,
-  .list-item-actions { grid-column: 2; }
+  .list-item-actions   { grid-column: 2; }
 
+  /* Calendar */
   .calendar-grid { font-size: 0.72rem; }
-  .calendar-day { min-height: 55px; }
+  .calendar-day  { min-height: 55px; }
 
+  /* Forms */
   .form-row-2,
   .modern-form .form-row { grid-template-columns: 1fr; }
-  .quick-view-grid { grid-template-columns: 1fr; }
+
+  /* Modal content — 1 column */
+  .quick-view-grid   { grid-template-columns: 1fr; }
   .cost-summary-grid { grid-template-columns: 1fr; }
 
+  /* Charts */
   .chart-container,
-  .chart-card { padding: 1rem; margin-bottom: 1.2rem; }
+  .chart-card {
+    padding: 1rem;
+    margin-bottom: 1.2rem;
+  }
   .chart-container h3,
-  .chart-card h3 { font-size: 0.9rem; margin-bottom: 0.75rem; }
+  .chart-card h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+  }
   .chart-container canvas { max-height: 220px; }
 
+  /* Modals */
   .modal-content { max-width: 95vw; border-radius: var(--radius-md); }
   .modal-header,
   .modal-header-bar { padding: 1.2rem 1.2rem 0.8rem; }
-  .modal-body { padding: 1.2rem; }
-  .modal-footer { padding: 0.9rem 1.2rem 1.2rem; }
-  .modal-search { margin: 0 1.2rem 1rem; width: calc(100% - 2.4rem); }
+  .modal-body       { padding: 1.2rem; }
+  .modal-footer     { padding: 0.9rem 1.2rem 1.2rem; }
+  .modal-search     { margin: 0 1.2rem 1rem; width: calc(100% - 2.4rem); }
+  .modal-close-btn,
+  .modal-content > .close-btn {
+    width: 32px;
+    height: 32px;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+
+  /* Quick view modal — stack actions */
+  .quick-view-hero { flex-wrap: wrap; }
+  .quick-view-hero-badges {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .quick-view-hero-title { font-size: 1.1rem; }
+  .quick-view-actions {
+    flex-direction: column-reverse;
+  }
+  .quick-view-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Toasts */
+  .toast-container {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
+  .toast { min-width: 0; }
+
+  /* Filter tabs — horizontal scroll */
+  .filter-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+
+  /* Request modal footer */
+  .request-modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .request-modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .request-footer-spacer { display: none; }
+
+  /* Service record timeline — smaller icons */
+  .timeline-icon {
+    width: 2rem;
+    height: 2rem;
+    left: -1.75rem;
+  }
 }
 
+
+/* ------------------------------------------------------------
+   480px — Mobile portrait
+   ------------------------------------------------------------ */
 @media (max-width: 480px) {
-  .main-content { padding: 1rem; }
-  .kpi-grid { grid-template-columns: 1fr; }
+  /* Layout */
+  .main-content    { padding: 1rem; }
+  .compact-dashboard { padding: 1rem; }
+
+  /* KPI grids — 1 column */
+  .kpi-grid           { grid-template-columns: 1fr; }
   .planner-stats-grid { grid-template-columns: 1fr; }
+  .requests-stats-grid { grid-template-columns: 1fr; }
+
+  /* Page icon + titles */
   .page-icon { width: 40px; height: 40px; font-size: 1.1rem; }
+
   .dashboard-header h2,
   .projects-header h2,
   .service-planner-header h2,
   .service-record-header h2,
-  .showcase-header h2 { font-size: 1.4rem; }
-  .pin-input { font-size: 1.5rem; letter-spacing: 0.45em; }
-  .approve-login-card { padding: 1.5rem 1.2rem; }
-  .approve-actions { gap: 0.6rem; }
+  .showcase-header h2,
+  .requests-header h2,
+  .projects-header-title h2 {
+    font-size: 1.4rem;
+  }
+
+  /* Auth */
+  .pin-input            { font-size: 1.5rem; letter-spacing: 0.45em; }
+  .approve-login-card   { padding: 1.5rem 1.2rem; }
+  .approve-actions      { gap: 0.6rem; }
+
+  /* Templates */
   .templates-grid { grid-template-columns: 1fr; }
+
+  /* Charts */
   .chart-container,
   .chart-card { padding: 0.85rem; }
   .chart-container canvas { max-height: 180px; }
-  .chart-card canvas { max-height: 160px; }
+  .chart-card canvas      { max-height: 160px; }
+
+  /* Modals */
   .modal-content { border-radius: var(--radius-sm); }
   .modal-header h2,
   .modal-header-bar h2 { font-size: 1.05rem; }
+
+  /* Request modal */
+  .request-detail-grid { grid-template-columns: 1fr; }
+  .request-detail-field.request-detail-full { grid-column: auto; }
+  .request-modal-title h2 { font-size: 1rem; }
+
+  /* Dashboard greeting */
+  .dashboard-greeting h2       { font-size: 1.3rem; }
+  .dashboard-greeting-subtitle { font-size: 0.82rem; }
+
+  /* Toast */
+  .toast-container { top: 8px; right: 8px; left: 8px; }
+
+  /* Toolbar */
+  .projects-toolbar #clear-filters-btn { margin-left: 0; }
+}
+
+
+/* ------------------------------------------------------------
+   Touch devices — better tap targets, disable hover-lift
+   ------------------------------------------------------------ */
+@media (hover: none) {
+  /* Ensure interactive elements are at least 40px tall */
+  .btn,
+  .btn-sm,
+  .project-action-btn,
+  .filter-pill,
+  .view-toggle-btn,
+  .quick-filter-chip,
+  .custom-select-trigger {
+    min-height: 40px;
+  }
+
+  /* Disable hover-lift transforms (they stick on touch) */
+  .card:hover,
+  .kpi-card:hover,
+  .stat-card:hover,
+  .project-card:hover,
+  .plan-card:hover,
+  .kanban-card:hover,
+  .request-card:hover,
+  .showcase-card:hover,
+  .dashboard-widget:hover,
+  .chart-container:hover,
+  .chart-card:hover,
+  .clickable:hover,
+  .project-list-row:hover,
+  .requests-widget-item:hover,
+  .reviews-widget-item:hover,
+  .compact-widget-item:hover {
+    transform: none;
+  }
 }
 
 
