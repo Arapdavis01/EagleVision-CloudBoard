@@ -5,19 +5,15 @@
 //   • Cloudboard's Postgres DB (via the existing shared pool)
 //   • Cloudboard's own web server (/health endpoint)
 //
-// This is SEPARATE from jobs/uptimeCron.js, which checks CLIENT
-// projects every 5 minutes and writes to uptime_logs. That job is
-// client-facing; this one is internal. They answer different
-// questions at different cadences and should never be merged.
+// SEPARATE from jobs/uptimeCron.js (client-facing, every 5 min).
 //
-// Step 1 scope:
-//   • Probe both targets in parallel
-//   • Compute verdict: up | degraded | down
-//   • Cache in memory
-//   • Log each tick to the terminal
+// Step 2 scope:
+//   • Debounce: 3 consecutive failures → down
+//   • Debounce: 3 consecutive successes → up
+//   • Latency > DEGRADED_AFTER → degraded (immediate, no debounce)
+//   • State machine keeps `since` (when the current status began)
 //
-// NOT in Step 1 (later):
-//   • Debounce (3 consecutive fails before flipping to "down")
+// NOT in Step 2 (later):
 //   • Persist state changes to a monitoring_events table
 //   • WebSocket broadcast
 // ============================================================
@@ -29,16 +25,15 @@ const pool = require('../config/db');
 // ============================================================
 // CONFIG
 // ============================================================
-const INTERVAL_CRON   = '*/30 * * * * *';  // every 30 seconds
-const PROBE_TIMEOUT   = 5000;               // ms — per-probe timeout
-const DEGRADED_AFTER  = 500;                // ms — latency above this = degraded
+const INTERVAL_CRON   = '*/30 * * * * *';   // every 30 seconds
+const PROBE_TIMEOUT   = 5000;                // ms — per-probe timeout
+const DEGRADED_AFTER  = 500;                 // ms — latency above this = degraded
+const FAILS_TO_DOWN   = 3;                   // consecutive fails before flipping to down
+const OKS_TO_UP       = 3;                   // consecutive oks before flipping back to up
 
 
 // ============================================================
-// TARGETS — one entry per thing we monitor
-// ============================================================
-// Adding a target = adding a block here. `id` is the stable key
-// used everywhere downstream (state cache, events table, WS payload).
+// TARGETS
 // ============================================================
 const TARGETS = [
   { id: 'cloudboard-db',  name: 'Cloudboard Postgres', kind: 'postgres' },
@@ -49,20 +44,31 @@ const TARGETS = [
 // ============================================================
 // IN-MEMORY STATE
 // ============================================================
-// Primary source of truth for "what is the current status".
-// (Later we'll also write changes to the DB for history, but the
-// memory cache is what the API and WebSocket read from, so the
-// hub works even when the DB is down.)
+// For each target we track:
+//   status        — current verdict: 'up' | 'degraded' | 'down' | 'unknown'
+//   since         — epoch ms when the current status began
+//   latency       — ms of the most recent probe
+//   error         — most recent error message, or null
+//   lastChecked   — epoch ms of the most recent probe
+//   consecutiveFails — count of consecutive probe failures
+//   consecutiveOks   — count of consecutive probe successes
+//
+// `status` flips only when the debounce thresholds are crossed.
+// `latency` / `error` / `lastChecked` update every tick regardless,
+// so the UI always shows fresh numbers even when status is stable.
 // ============================================================
 const state = {};
 for (const t of TARGETS) {
   state[t.id] = {
     id: t.id,
     name: t.name,
-    status: 'unknown',     // 'up' | 'degraded' | 'down' | 'unknown'
-    latency: null,         // ms
-    error: null,           // string | null
-    lastChecked: null,     // epoch ms
+    status: 'unknown',
+    since: null,
+    latency: null,
+    error: null,
+    lastChecked: null,
+    consecutiveFails: 0,
+    consecutiveOks: 0,
   };
 }
 
@@ -70,11 +76,6 @@ for (const t of TARGETS) {
 // ============================================================
 // PROBES
 // ============================================================
-
-/**
- * Probe the shared Postgres pool with a trivial query.
- * Reuses the warm pool from config/db.js — no new connection.
- */
 async function probeDB() {
   const start = Date.now();
   try {
@@ -85,12 +86,6 @@ async function probeDB() {
   }
 }
 
-/**
- * Probe our own Express server's /health endpoint.
- * Same process, so this is a loopback request — fast and reliable.
- * Catches: routes broken, event loop stalled, /health handler throws.
- * Misses:  whole-process freeze (needs an external pinger — later).
- */
 async function probeWeb() {
   const start = Date.now();
   const port = process.env.PORT || 5000;
@@ -98,7 +93,11 @@ async function probeWeb() {
     const res = await fetch(`http://localhost:${port}/health`, {
       signal: AbortSignal.timeout(PROBE_TIMEOUT),
     });
-    return { ok: res.ok, latency: Date.now() - start, error: res.ok ? null : `HTTP ${res.status}` };
+    return {
+      ok: res.ok,
+      latency: Date.now() - start,
+      error: res.ok ? null : `HTTP ${res.status}`,
+    };
   } catch (err) {
     return { ok: false, latency: Date.now() - start, error: err.message };
   }
@@ -106,12 +105,62 @@ async function probeWeb() {
 
 
 // ============================================================
-// VERDICT
+// STATE MACHINE
 // ============================================================
-function verdict(probe) {
-  if (!probe.ok) return 'down';
-  if (probe.latency > DEGRADED_AFTER) return 'degraded';
-  return 'up';
+/**
+ * Apply one probe result to one target's state.
+ * Returns true if `status` changed, false otherwise.
+ *
+ * Rules:
+ *   • Probe failed → increment fails, reset oks.
+ *     - status flips to 'down' when fails >= FAILS_TO_DOWN
+ *   • Probe succeeded → increment oks, reset fails.
+ *     - status flips to 'up' when oks >= OKS_TO_UP AND current is not 'up'
+ *     - but if latency > DEGRADED_AFTER, immediate flip to 'degraded'
+ *       (degraded is not a "failure" — it's a health signal)
+ */
+function applyProbe(entry, probe) {
+  const previous = entry.status;
+  const now = Date.now();
+
+  if (!probe.ok) {
+    entry.consecutiveFails += 1;
+    entry.consecutiveOks = 0;
+
+    if (entry.consecutiveFails >= FAILS_TO_DOWN && entry.status !== 'down') {
+      entry.status = 'down';
+      entry.since = now;
+    }
+  } else {
+    entry.consecutiveOks += 1;
+    entry.consecutiveFails = 0;
+
+    // Latency-driven degraded is immediate — no debounce needed
+    if (probe.latency > DEGRADED_AFTER) {
+      if (entry.status !== 'degraded') {
+        entry.status = 'degraded';
+        entry.since = now;
+      }
+    } else {
+      // Healthy latency. Only promote back to 'up' after OKS_TO_UP.
+      // Special case: if we're at 'unknown', accept the first probe
+      // immediately — no reason to wait 3 ticks to say "up".
+      const isFirstVerdict = entry.status === 'unknown';
+      const enoughOks = entry.consecutiveOks >= OKS_TO_UP;
+
+      if (entry.status !== 'up' && (isFirstVerdict || enoughOks)) {
+        entry.status = 'up';
+        entry.since = now;
+      }
+    }
+  }
+
+  // Always refresh fresh data
+  entry.latency     = probe.latency;
+  entry.error       = probe.error || null;
+  entry.lastChecked = now;
+
+  return entry.status !== previous;
 }
 
 
@@ -121,13 +170,20 @@ function verdict(probe) {
 async function tick() {
   const [db, web] = await Promise.all([probeDB(), probeWeb()]);
 
-  const now = Date.now();
-  state['cloudboard-db']  = { ...state['cloudboard-db'],  status: verdict(db),  latency: db.latency,  error: db.error,  lastChecked: now };
-  state['cloudboard-web'] = { ...state['cloudboard-web'], status: verdict(web), latency: web.latency, error: web.error, lastChecked: now };
+  const dbChanged  = applyProbe(state['cloudboard-db'],  db);
+  const webChanged = applyProbe(state['cloudboard-web'], web);
 
-  // Compact one-line log per tick
   const fmt = (s) => `${s.status}(${s.latency}ms)`;
-  console.log(`[monitor] db=${fmt(state['cloudboard-db'])}  web=${fmt(state['cloudboard-web'])}`);
+  const flag = (changed) => (changed ? ' ⚠' : '');
+
+  console.log(
+    `[monitor] db=${fmt(state['cloudboard-db'])}${flag(dbChanged)}` +
+    `  web=${fmt(state['cloudboard-web'])}${flag(webChanged)}`
+  );
+
+  // Step 3 hook — persist state changes to DB here
+  // if (dbChanged)  await recordEvent(state['cloudboard-db']);
+  // if (webChanged) await recordEvent(state['cloudboard-web']);
 }
 
 
@@ -143,14 +199,12 @@ function startMonitoringCron() {
     try {
       await tick();
     } catch (err) {
-      // Never let a tick crash the process
       console.error('[monitor] tick failed:', err.message);
     }
   });
 
-  console.log(`[monitor] cron started (${INTERVAL_CRON} = every 30s)`);
+  console.log(`[monitor] cron started (every 30s, debounce ${FAILS_TO_DOWN} fails → down)`);
 
-  // Run one tick immediately so the terminal shows output right away
   tick().catch((err) => console.error('[monitor] initial tick failed:', err.message));
 
   return task;
@@ -166,10 +220,30 @@ function stopMonitoringCron() {
 
 
 // ============================================================
-// PUBLIC ACCESS (used by Step 2's /api/monitoring/state)
+// PUBLIC ACCESS
 // ============================================================
 function getState() {
   return state;
+}
+
+/**
+ * Shape the state for API consumers — strip internal debounce counters.
+ * Returns a plain object keyed by target id.
+ */
+function getPublicState() {
+  const out = {};
+  for (const [id, entry] of Object.entries(state)) {
+    out[id] = {
+      id: entry.id,
+      name: entry.name,
+      status: entry.status,
+      since: entry.since,
+      latency: entry.latency,
+      error: entry.error,
+      lastChecked: entry.lastChecked,
+    };
+  }
+  return out;
 }
 
 
@@ -180,4 +254,5 @@ module.exports = {
   startMonitoringCron,
   stopMonitoringCron,
   getState,
+  getPublicState,
 };
