@@ -8228,3 +8228,580 @@ body.page-dashboard .main-content { padding: 1.25rem 1.5rem; }
   color: var(--status-error);
 }
 .monitoring-error i {
+/* ============================================================
+   39. MONITORING — SUMMARY LAYOUT  (Session A)
+   ============================================================
+   Overrides the earlier partial "38. MONITORING PAGE" block.
+   Adds: header right cluster, banner, summary tiles, toolbar,
+   duration pill on activity rows, sticky header, responsive.
+
+   Load order: MUST come AFTER everything else.
+   ============================================================ */
+
+
+/* ------------------------------------------------------------
+   39.1  PAGE SHELL + STICKY HEADER
+   ------------------------------------------------------------ */
+.monitoring-page {
+  padding: 1.25rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Sticky header — stays visible while scrolling the grid */
+.monitoring-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 0.25rem;
+}
+
+.monitoring-header-left h2 {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.1rem;
+  background: linear-gradient(135deg, var(--text-heading) 0%, var(--primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.monitoring-header-left .page-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.monitoring-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+/* ---------- Refresh button ---------- */
+.monitoring-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  background: #FFFFFF;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: var(--shadow-xs);
+}
+
+.monitoring-refresh-btn i {
+  font-size: 0.75rem;
+  transition: transform 0.6s ease;
+}
+
+.monitoring-refresh-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary-dark);
+  background: var(--primary-tint);
+}
+
+.monitoring-refresh-btn:hover:not(:disabled) i {
+  transform: rotate(90deg);
+}
+
+.monitoring-refresh-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.monitoring-refresh-btn.is-loading i {
+  animation: monitoringSpin 0.9s linear infinite;
+}
+
+@keyframes monitoringSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Live indicator (kept, tightened) ---------- */
+.monitoring-live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  background: #FFFFFF;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-xs);
+  white-space: nowrap;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  position: relative;
+  flex-shrink: 0;
+}
+.live-dot[data-state="connecting"] { background: var(--status-warn); animation: livePulse 1.4s ease-in-out infinite; }
+.live-dot[data-state="open"]       { background: var(--primary);     animation: livePulse 2s   ease-in-out infinite; }
+.live-dot[data-state="closed"]     { background: var(--status-error); }
+
+.live-label { color: var(--text-secondary); }
+.monitoring-live-indicator:has(.live-dot[data-state="open"]) .live-label { color: var(--primary-dark); }
+
+@keyframes livePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.35); opacity: 0.65; }
+}
+
+
+/* ------------------------------------------------------------
+   39.2  HEALTH BANNER
+   ------------------------------------------------------------ */
+.monitoring-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: #FFFFFF;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+  box-shadow: var(--shadow-xs);
+}
+
+.monitoring-banner i {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* State: all up */
+.monitoring-banner[data-state="up"] {
+  background: linear-gradient(180deg, rgba(22, 163, 74, 0.06), rgba(22, 163, 74, 0.02));
+  border-color: rgba(22, 163, 74, 0.28);
+  color: var(--primary-dark);
+}
+.monitoring-banner[data-state="up"] i { color: var(--primary); }
+
+/* State: something degraded */
+.monitoring-banner[data-state="degraded"] {
+  background: linear-gradient(180deg, rgba(234, 88, 12, 0.06), rgba(234, 88, 12, 0.02));
+  border-color: rgba(234, 88, 12, 0.28);
+  color: var(--status-warn);
+}
+.monitoring-banner[data-state="degraded"] i { color: var(--status-warn); }
+
+/* State: something down */
+.monitoring-banner[data-state="down"] {
+  background: linear-gradient(180deg, rgba(220, 38, 38, 0.06), rgba(220, 38, 38, 0.02));
+  border-color: rgba(220, 38, 38, 0.28);
+  color: var(--status-error);
+}
+.monitoring-banner[data-state="down"] i { color: var(--status-error); }
+
+/* State: loading / no data */
+.monitoring-banner[data-state="loading"] {
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+}
+.monitoring-banner[data-state="loading"] i { color: var(--text-muted); }
+
+
+/* ------------------------------------------------------------
+   39.3  SUMMARY TILES
+   ------------------------------------------------------------ */
+.monitoring-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.monitoring-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  background: #FFFFFF;
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: var(--shadow-xs);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  text-align: left;
+  font-family: inherit;
+}
+
+.monitoring-tile:hover {
+  border-color: var(--border-brand);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.monitoring-tile:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.monitoring-tile.is-active {
+  background: linear-gradient(180deg, rgba(22, 163, 74, 0.05), rgba(22, 163, 74, 0.01));
+  border-color: var(--primary);
+  border-left-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Tile dot + label row */
+.monitoring-tile-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tile-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+
+/* Tile value — the big number */
+.monitoring-tile-value {
+  font-family: var(--font-display);
+  font-size: 1.85rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--text-heading);
+  margin-top: 0.15rem;
+}
+
+.monitoring-tile-pct {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Tile color variants ---------- */
+.monitoring-tile.tile-total .tile-dot     { background: var(--text-muted); }
+.monitoring-tile.tile-up .tile-dot        { background: var(--primary); }
+.monitoring-tile.tile-degraded .tile-dot  { background: var(--status-warn); }
+.monitoring-tile.tile-down .tile-dot      { background: var(--status-error); }
+
+.monitoring-tile.tile-up       { border-left-color: var(--primary); }
+.monitoring-tile.tile-degraded { border-left-color: var(--status-warn); }
+.monitoring-tile.tile-down     { border-left-color: var(--status-error); }
+
+.monitoring-tile.tile-up       .monitoring-tile-value { color: var(--primary-dark); }
+.monitoring-tile.tile-degraded .monitoring-tile-value { color: var(--status-warn); }
+.monitoring-tile.tile-down     .monitoring-tile-value { color: var(--status-error); }
+
+/* Zero-value tiles are visually quiet */
+.monitoring-tile.is-zero {
+  opacity: 0.55;
+}
+.monitoring-tile.is-zero:hover { opacity: 1; }
+
+/* Non-zero degraded/down tiles pulse subtly for attention */
+.monitoring-tile.tile-degraded:not(.is-zero) .tile-dot,
+.monitoring-tile.tile-down:not(.is-zero) .tile-dot {
+  animation: tileDotPulse 2.2s ease-in-out infinite;
+}
+@keyframes tileDotPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.4); opacity: 0.6; }
+}
+
+
+/* ------------------------------------------------------------
+   39.4  TOOLBAR — search + sort
+   ------------------------------------------------------------ */
+.monitoring-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.2rem;
+}
+
+.monitoring-toolbar .search-wrapper {
+  flex: 1 1 260px;
+  min-width: 220px;
+  position: relative;
+}
+
+.monitoring-toolbar .search-wrapper i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
+.monitoring-toolbar .search-wrapper input {
+  width: 100%;
+  padding: 0.55rem 1rem 0.55rem 2.25rem;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  background: #FFFFFF;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  outline: none;
+  transition: var(--transition-fast);
+  box-shadow: var(--shadow-xs);
+}
+.monitoring-toolbar .search-wrapper input::placeholder { color: var(--text-muted); }
+.monitoring-toolbar .search-wrapper input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.monitoring-toolbar .filter-select {
+  padding: 0.55rem 2.1rem 0.55rem 0.9rem;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  background: #FFFFFF;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  transition: var(--transition-fast);
+  box-shadow: var(--shadow-xs);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2316A34A' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 11px;
+}
+.monitoring-toolbar .filter-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.monitoring-toolbar #clear-filters-btn {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 0.5rem 0.9rem;
+}
+.monitoring-toolbar #clear-filters-btn:hover {
+  color: var(--status-error);
+  background: rgba(220, 38, 38, 0.06);
+}
+
+
+/* ------------------------------------------------------------
+   39.5  CARD GRID — refinements for summary mode
+   ------------------------------------------------------------ */
+.monitoring-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.65rem;
+}
+
+/* Card base — smaller and flatter than the original block */
+.monitoring-card {
+  padding: 0.85rem 0.9rem;
+  gap: 0.45rem;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-xs);
+}
+
+.monitoring-card-name {
+  font-size: 0.9rem;
+}
+
+.monitoring-card-status {
+  font-size: 0.62rem;
+}
+
+.monitoring-card-icon {
+  width: 28px;
+  height: 28px;
+  font-size: 0.78rem;
+}
+
+.monitoring-card-meta {
+  font-size: 0.68rem;
+}
+
+.monitoring-card-since { font-size: 0.65rem; }
+
+
+/* ------------------------------------------------------------
+   39.6  EVENT ROW — duration pill on recovery rows
+   ------------------------------------------------------------ */
+.event-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--primary-tint);
+  border: 1px solid var(--border-brand);
+  color: var(--primary-dark);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.event-duration i {
+  font-size: 0.55rem;
+  opacity: 0.85;
+}
+
+
+/* ------------------------------------------------------------
+   39.7  HIDDEN HELPER (safety — some pages may not define)
+   ------------------------------------------------------------ */
+.monitoring-page .hidden { display: none !important; }
+
+
+/* ------------------------------------------------------------
+   39.8  RESPONSIVE
+   ------------------------------------------------------------ */
+
+/* <1100px — tiles go 4 → 2 */
+@media (max-width: 1099px) {
+  .monitoring-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .monitoring-tile-value { font-size: 1.6rem; }
+}
+
+/* <900px — grid collapses to single column */
+@media (max-width: 899px) {
+  .monitoring-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+  .monitoring-header {
+    position: static;    /* un-stick on narrow screens */
+  }
+}
+
+/* <700px — header stacks, tiles compact */
+@media (max-width: 699px) {
+  .monitoring-page { padding: 1rem; }
+
+  .monitoring-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .monitoring-header-right {
+    justify-content: space-between;
+  }
+
+  .monitoring-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .monitoring-toolbar .search-wrapper,
+  .monitoring-toolbar .filter-select,
+  .monitoring-toolbar #clear-filters-btn {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+
+  .monitoring-tile { padding: 0.75rem 0.85rem; }
+  .monitoring-tile-value { font-size: 1.45rem; }
+
+  .monitoring-event {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+  .monitoring-event-time {
+    flex-direction: row;
+    gap: 0.4rem;
+  }
+
+  .event-error { max-width: 100%; }
+}
+
+/* <480px — tiles stack 1-up */
+@media (max-width: 479px) {
+  .monitoring-summary {
+    grid-template-columns: 1fr;
+  }
+  .monitoring-tile-value { font-size: 1.35rem; }
+  .monitoring-live-indicator { font-size: 0.6rem; padding: 0.35rem 0.7rem; }
+  .monitoring-refresh-btn span { display: none; }   /* icon-only */
+  .monitoring-refresh-btn { padding: 0.5rem; }
+}
+
+
+/* ------------------------------------------------------------
+   39.9  TOUCH DEVICES — kill hover-lift
+   ------------------------------------------------------------ */
+@media (hover: none) {
+  .monitoring-tile:hover {
+    transform: none;
+    border-color: var(--border-subtle);
+  }
+  .monitoring-tile.tile-up:hover       { border-color: var(--primary); }
+  .monitoring-tile.tile-degraded:hover { border-color: var(--status-warn); }
+  .monitoring-tile.tile-down:hover     { border-color: var(--status-error); }
+  .monitoring-tile.is-active:hover     { border-color: var(--primary); }
+}
+
+
+/* ------------------------------------------------------------
+   39.10  REDUCED MOTION
+   ------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .live-dot,
+  .tile-dot,
+  .monitoring-refresh-btn i {
+    animation: none !important;
+    transition: none !important;
+  }
+  .monitoring-refresh-btn:hover:not(:disabled) i {
+    transform: none;
+  }
+}
