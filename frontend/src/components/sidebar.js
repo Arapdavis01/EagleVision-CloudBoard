@@ -24,6 +24,7 @@ import {
 
 export function renderSidebar() {
   const showThemeToggle = FEATURES.themeToggle;
+  const showMonitoring  = FEATURES.monitoring;
 
   return `
     <div class="sidebar">
@@ -88,6 +89,12 @@ export function renderSidebar() {
       <a href="${ROUTES.ALERTS}" class="nav-link" data-page="alerts">
         <i class="fas fa-exclamation-triangle"></i> Alerts
       </a>
+
+      ${showMonitoring ? `
+        <a href="${ROUTES.MONITORING}" class="nav-link" data-page="monitoring">
+          <i class="fas fa-heartbeat"></i> Monitoring
+        </a>
+      ` : ''}
 
       ${showThemeToggle ? `
         <button id="theme-toggle-btn" class="theme-toggle-btn" type="button">
