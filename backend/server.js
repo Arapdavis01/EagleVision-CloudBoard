@@ -20,6 +20,7 @@ const helmet        = require('helmet');
 const cors                = require('./middleware/cors');
 const errorHandler        = require('./utils/errorHandler');
 const { startUptimeCron } = require('./jobs/uptimeCron');
+const { startMonitoringCron, stopMonitoringCron } = require('./jobs/monitoringCron');
 
 // ---------- Route modules ----------
 const authRoutes            = require('./routes/auth');
@@ -143,12 +144,12 @@ app.use(errorHandler);
 
 
 // ============================================================
-// 9. LISTEN — then start cron
+// 9. LISTEN — then start crons
 // ============================================================
 const server = app.listen(PORT, () => {
   console.log(`[server] running on port ${PORT} (${IS_PROD ? 'production' : 'development'})`);
 
-  // Start cron AFTER listen succeeds. If it throws, the server
+  // Start crons AFTER listen succeeds. If either throws, the server
   // is already up and Render won't kill the deployment.
   try {
     startUptimeCron();
@@ -156,17 +157,31 @@ const server = app.listen(PORT, () => {
   } catch (err) {
     console.error('[cron] failed to start:', err);
   }
+
+  try {
+    startMonitoringCron();
+  } catch (err) {
+    console.error('[monitor] failed to start:', err);
+  }
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('[server] SIGTERM received, shutting down gracefully');
-  server.close(() => process.exit(0));
-});
 
-process.on('SIGINT', () => {
-  console.log('[server] SIGINT received, shutting down gracefully');
+// ============================================================
+// 10. GRACEFUL SHUTDOWN
+// ============================================================
+// Stop crons first so their timers don't keep the event loop
+// alive past server.close()'s callback.
+const shutdown = (signal) => {
+  console.log(`[server] ${signal} received, shutting down gracefully`);
+  try {
+    stopMonitoringCron();
+  } catch (err) {
+    console.error('[monitor] stop failed:', err);
+  }
   server.close(() => process.exit(0));
-});
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 module.exports = app;
