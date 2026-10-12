@@ -11,6 +11,11 @@
 //   mount → fetch state + events → render → connect WS
 //   WS status msg → patch one card + prepend event row
 //   WS tick msg   → update "live · Ns ago" ticker
+//
+// Event names:
+//   Events store a `target_id` (e.g. "project-4"), not a display
+//   name. We resolve the name from `currentState` at render time,
+//   falling back to the raw id if the target isn't known.
 // ============================================================
 
 import { renderSidebar, initSidebar } from '../../components/sidebar.js';
@@ -19,7 +24,6 @@ import { socketService }    from '../../services/socket.js';
 import { escapeHtml }       from '../../utils/dom.js';
 import { format }           from '../../utils/format.js';
 import { registerCleanup }  from '../../utils/pageLifecycle.js';
-import { showToast }        from '../../utils/notifications.js';
 import { ROUTES }           from '../../config/constants.js';
 
 
@@ -125,18 +129,20 @@ function attachSocketListeners() {
     if (!dot || !label) return;
 
     dot.dataset.state = state;
-    if (state === 'open')       label.textContent = 'Live';
+    if (state === 'open')            label.textContent = 'Live';
     else if (state === 'connecting') label.textContent = 'Connecting…';
-    else                        label.textContent = 'Reconnecting…';
+    else                             label.textContent = 'Reconnecting…';
   }));
 
   // Status changes → patch card + prepend event
   unsubscribers.push(socketService.on('status', (msg) => {
     lastMessageTs = msg.ts || Date.now();
     if (!msg.target) return;
-    currentState[msg.target.id] = msg.target;
+
+    currentState[msg.target.id] = msg.target;   // update name lookup first
     patchCard(msg.target);
-    if (msg.before !== null) {          // real change, not initial snapshot
+
+    if (msg.before !== null) {                  // real change, not initial snapshot
       prependEvent({
         target_id: msg.target.id,
         from_status: msg.before,
@@ -165,7 +171,7 @@ function startTickTicker() {
     if (!label || socketService.getState() !== 'open') return;
     if (!lastMessageTs) return;
     const secs = Math.round((Date.now() - lastMessageTs) / 1000);
-    label.textContent = secs < 5 ? 'Live'
+    label.textContent = secs < 5  ? 'Live'
                      : secs < 60 ? `Live · ${secs}s ago`
                      : `Live · ${Math.floor(secs / 60)}m ago`;
   }, 1000);
@@ -272,6 +278,12 @@ function renderEventRow(e) {
   const dateStr = ts.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const arrow   = `<span class="event-arrow">→</span>`;
 
+  // Resolve display name from the live state cache.
+  // Events only store the target_id; the human name lives in
+  // currentState (populated from /state and WS 'status' messages).
+  const target      = currentState[e.target_id];
+  const displayName = target?.name || e.target_id;
+
   return `
     <div class="monitoring-event">
       <div class="monitoring-event-time" title="${escapeHtml(ts.toISOString())}">
@@ -279,7 +291,7 @@ function renderEventRow(e) {
         <span class="event-date">${dateStr}</span>
       </div>
       <div class="monitoring-event-body">
-        <strong>${escapeHtml(e.target_id)}</strong>
+        <strong>${escapeHtml(displayName)}</strong>
         <span class="event-status from-${e.from_status}">${e.from_status}</span>
         ${arrow}
         <span class="event-status to-${e.to_status}">${e.to_status}</span>
