@@ -7,14 +7,14 @@
 //
 // SEPARATE from jobs/uptimeCron.js (client-facing, every 5 min).
 //
-// Step 2 scope:
+// Step 3 scope:
 //   • Debounce: 3 consecutive failures → down
 //   • Debounce: 3 consecutive successes → up
 //   • Latency > DEGRADED_AFTER → degraded (immediate, no debounce)
 //   • State machine keeps `since` (when the current status began)
+//   • State changes persisted to monitoring_events table
 //
-// NOT in Step 2 (later):
-//   • Persist state changes to a monitoring_events table
+// NOT in Step 3 (later):
 //   • WebSocket broadcast
 // ============================================================
 
@@ -165,10 +165,47 @@ function applyProbe(entry, probe) {
 
 
 // ============================================================
+// EVENT LOG
+// ============================================================
+/**
+ * Persist a state change to the monitoring_events table.
+ * Called only when applyProbe() returns true.
+ *
+ * Never throws — a failed log write should not kill the tick.
+ * Note: this is fire-and-forget. If the DB itself is the target
+ * that went down, the INSERT will fail; the state cache still
+ * reflects reality, only the historical record is missing.
+ */
+async function recordEvent(entry, fromStatus) {
+  try {
+    await pool.query(
+      `INSERT INTO monitoring_events
+         (target_id, from_status, to_status, latency_ms, error)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        entry.id,
+        fromStatus,
+        entry.status,
+        entry.latency,
+        entry.error || null,
+      ]
+    );
+  } catch (err) {
+    console.error(`[monitor] failed to log event for ${entry.id}:`, err.message);
+  }
+}
+
+
+// ============================================================
 // ONE TICK
 // ============================================================
 async function tick() {
   const [db, web] = await Promise.all([probeDB(), probeWeb()]);
+
+  // Capture previous statuses BEFORE applying the new probes,
+  // since applyProbe mutates entry.status in place.
+  const prevDb  = state['cloudboard-db'].status;
+  const prevWeb = state['cloudboard-web'].status;
 
   const dbChanged  = applyProbe(state['cloudboard-db'],  db);
   const webChanged = applyProbe(state['cloudboard-web'], web);
@@ -181,9 +218,10 @@ async function tick() {
     `  web=${fmt(state['cloudboard-web'])}${flag(webChanged)}`
   );
 
-  // Step 3 hook — persist state changes to DB here
-  // if (dbChanged)  await recordEvent(state['cloudboard-db']);
-  // if (webChanged) await recordEvent(state['cloudboard-web']);
+  // Persist state changes — fire and forget so a DB hiccup
+  // doesn't stall the next tick.
+  if (dbChanged)  recordEvent(state['cloudboard-db'],  prevDb);
+  if (webChanged) recordEvent(state['cloudboard-web'], prevWeb);
 }
 
 
