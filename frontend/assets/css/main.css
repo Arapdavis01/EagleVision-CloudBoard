@@ -8227,7 +8227,14 @@ body.page-dashboard .main-content { padding: 1.25rem 1.5rem; }
   border-radius: var(--radius-md);
   color: var(--status-error);
 }
+
 .monitoring-error i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  display: block;
+  opacity: 0.7;
+}
+
 /* ============================================================
    39. MONITORING — SUMMARY LAYOUT  (Session A)
    ============================================================
