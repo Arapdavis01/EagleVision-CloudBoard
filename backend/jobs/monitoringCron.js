@@ -18,8 +18,13 @@
 // Dynamic targets (project homepages):
 //   • Sourced from `projects` table where status IN ('Live','Maintenance')
 //   • Refreshed every 5 min. Keeps last-known list if refresh fails.
+//   • Auto-discovers newly added projects (no deploy needed).
 //   • Per-host thresholds: Vercel fast, Render tolerant (cold starts
 //     AND rate limits → 60s cadence), custom domains mid-range.
+//
+// Manual triggers (used by POST /api/monitoring/refresh):
+//   • triggerTick()          — force an immediate probe of all targets
+//   • forceRefreshTargets()  — force an immediate re-query of `projects`
 //
 // Note: homepage probes only detect "HTML loads". A project whose
 // frontend loads but whose backend is broken will show as UP. To
@@ -83,6 +88,7 @@ const state = {};
 let dynamicTargets = [];            // last successfully loaded list
 let lastTargetRefresh = 0;          // epoch ms of last successful refresh
 let tickCounter = 0;                // increments on every tick
+let tickInFlight = false;           // guard against overlapping ticks
 
 
 // ============================================================
@@ -379,59 +385,108 @@ async function recordEvent(entry, fromStatus) {
 // ============================================================
 // ONE TICK
 // ============================================================
-async function tick() {
-  tickCounter += 1;
+async function tick(options = {}) {
+  const { forceAll = false } = options;
 
-  // Refresh dynamic targets every 5 minutes
-  if (Date.now() - lastTargetRefresh > TARGET_REFRESH_MS) {
-    await refreshDynamicTargets();
-    lastTargetRefresh = Date.now();
-  }
-
-  // Snapshot every known target
-  const allTargets = Object.values(state)
-    .map((e) => e._config)
-    .filter(Boolean);
-
-  if (allTargets.length === 0) {
-    console.log('[monitor] no targets yet');
+  // Prevent overlapping ticks (auto-refresh can collide with manual)
+  if (tickInFlight) {
+    console.log('[monitor] tick skipped — previous tick still running');
     return;
   }
+  tickInFlight = true;
 
-  // Pick the targets due on this tick
-  // (skip targets whose probeEveryNTicks means "not this time")
-  const dueTargets = allTargets.filter((t) => {
-    const every = t.probeEveryNTicks ?? 1;
-    return tickCounter % every === 0;
-  });
+  try {
+    tickCounter += 1;
 
-  if (dueTargets.length === 0) return;
-
-  // Probe them all in parallel
-  const results = await Promise.all(dueTargets.map(probeTarget));
-
-  // Apply, log, broadcast
-  const line = [];
-  for (let i = 0; i < dueTargets.length; i++) {
-    const t = dueTargets[i];
-    const r = results[i];
-    const entry = state[t.id];
-    if (!entry) continue;
-
-    const prev = entry.status;
-    const changed = applyProbe(entry, r, t);
-
-    const flag = changed ? ' ⚠' : '';
-    line.push(`${t.id}=${entry.status}(${entry.latency}ms)${flag}`);
-
-    if (changed) {
-      recordEvent(entry, prev);
-      const publicEntry = getPublicState()[t.id];
-      broadcastStatusChange(publicEntry, prev, entry.status);
+    // Refresh dynamic targets every 5 minutes (or forced)
+    if (forceAll || Date.now() - lastTargetRefresh > TARGET_REFRESH_MS) {
+      await refreshDynamicTargets();
+      lastTargetRefresh = Date.now();
     }
-  }
 
-  console.log(`[monitor] ${line.join('  ')}`);
+    // Snapshot every known target
+    const allTargets = Object.values(state)
+      .map((e) => e._config)
+      .filter(Boolean);
+
+    if (allTargets.length === 0) {
+      console.log('[monitor] no targets yet');
+      return;
+    }
+
+    // Pick the targets due on this tick.
+    // When forceAll is true (manual refresh), probe everything regardless
+    // of probeEveryNTicks — the user asked explicitly.
+    const dueTargets = forceAll
+      ? allTargets
+      : allTargets.filter((t) => {
+          const every = t.probeEveryNTicks ?? 1;
+          return tickCounter % every === 0;
+        });
+
+    if (dueTargets.length === 0) return;
+
+    // Probe them all in parallel
+    const results = await Promise.all(dueTargets.map(probeTarget));
+
+    // Apply, log, broadcast
+    const line = [];
+    for (let i = 0; i < dueTargets.length; i++) {
+      const t = dueTargets[i];
+      const r = results[i];
+      const entry = state[t.id];
+      if (!entry) continue;
+
+      const prev = entry.status;
+      const changed = applyProbe(entry, r, t);
+
+      const flag = changed ? ' ⚠' : '';
+      line.push(`${t.id}=${entry.status}(${entry.latency}ms)${flag}`);
+
+      if (changed) {
+        recordEvent(entry, prev);
+        const publicEntry = getPublicState()[t.id];
+        broadcastStatusChange(publicEntry, prev, entry.status);
+      }
+    }
+
+    const prefix = forceAll ? '[monitor] (forced)' : '[monitor]';
+    console.log(`${prefix} ${line.join('  ')}`);
+  } finally {
+    tickInFlight = false;
+  }
+}
+
+
+// ============================================================
+// PUBLIC MANUAL TRIGGERS
+// ============================================================
+// Called by routes/monitoring.js when the frontend hits the
+// manual-refresh button (POST /api/monitoring/refresh).
+//
+// triggerTick():
+//   • Forces a re-query of the projects table (so new projects
+//     appear instantly instead of waiting up to 5 minutes)
+//   • Probes every target regardless of probeEveryNTicks
+//   • Broadcasts results to all connected WS clients
+//
+// Returns a summary the route can send back to the client.
+
+async function triggerTick() {
+  await tick({ forceAll: true });
+
+  // Return a compact summary — the frontend already gets the full
+  // state via WS, but this is useful for a "refreshed N targets" toast.
+  const entries = Object.values(state);
+  const summary = {
+    timestamp: Date.now(),
+    total: entries.length,
+    up: entries.filter((e) => e.status === 'up').length,
+    degraded: entries.filter((e) => e.status === 'degraded').length,
+    down: entries.filter((e) => e.status === 'down').length,
+    unknown: entries.filter((e) => e.status === 'unknown').length,
+  };
+  return summary;
 }
 
 
@@ -502,6 +557,7 @@ function getPublicState() {
 module.exports = {
   startMonitoringCron,
   stopMonitoringCron,
+  triggerTick,
   getState,
   getPublicState,
 };
