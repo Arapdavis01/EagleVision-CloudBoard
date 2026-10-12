@@ -70,6 +70,7 @@ export const ROUTES = {
   ALERTS:           '#alerts',
   CLIENT_REQUESTS:  '#client-requests',
   PUBLIC_STATUS:    '#public-status',
+  MONITORING:       '#monitoring',
 };
 
 // Routes accessible without a token
@@ -257,6 +258,7 @@ export const FEATURES = {
   bulkActions:   true,    // enable bulk select in service planner
   exportPdf:     false,   // reserved — PDF export
   publicStatus:  true,    // enable #public-status route
+  monitoring:    true,    // enable #monitoring route
   idleLogout:    true,    // auto-logout on inactivity
   debugConsole:  false,   // expose window.EV in dev mode
 };
