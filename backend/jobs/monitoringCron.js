@@ -1,19 +1,29 @@
 // ============================================================
 // EAGLEVISION CLOUDBOARD — MONITORING CRON
 // ============================================================
-// Infrastructure health monitor. Runs every 30 seconds and probes:
-//   • Cloudboard's Postgres DB (via the existing shared pool)
-//   • Cloudboard's own web server (/health endpoint)
+// Infrastructure + project health monitor.
 //
-// SEPARATE from jobs/uptimeCron.js (client-facing, every 5 min).
+//   • Every 30s: probe every known target in parallel
+//   • Every 5 min: refresh the dynamic target list from `projects`
+//   • Debounce: N consecutive fails → down (N varies by host)
+//   • Debounce: 3 consecutive OKs → up
+//   • Latency > per-host threshold → degraded (immediate)
+//   • State changes → monitoring_events + WebSocket broadcast
 //
-// Step 4 scope:
-//   • Debounce: 3 consecutive failures → down
-//   • Debounce: 3 consecutive successes → up
-//   • Latency > DEGRADED_AFTER → degraded (immediate, no debounce)
-//   • State machine keeps `since` (when the current status began)
-//   • State changes persisted to monitoring_events table
-//   • State changes broadcast over WebSocket via ws/statusHub.js
+// Static targets (infrastructure):
+//   • Cloudboard Postgres DB
+//   • Cloudboard Web (/health on localhost)
+//
+// Dynamic targets (project homepages):
+//   • Sourced from `projects` table where status IN ('Live','Maintenance')
+//   • Refreshed every 5 min. Keeps last-known list if refresh fails.
+//   • Per-host thresholds: Vercel fast, Render tolerant (cold starts),
+//     custom domains mid-range.
+//
+// Note: homepage probes only detect "HTML loads". A project whose
+// frontend loads but whose backend is broken will show as UP. To
+// catch that, add /health endpoints to each project and switch
+// its target URL here to /health.
 // ============================================================
 
 const cron = require('node-cron');
@@ -24,58 +34,172 @@ const { broadcastStatusChange } = require('../ws/statusHub');
 // ============================================================
 // CONFIG
 // ============================================================
-const INTERVAL_CRON   = '*/30 * * * * *';   // every 30 seconds
-const PROBE_TIMEOUT   = 5000;                // ms — per-probe timeout
-const DEGRADED_AFTER  = 500;                 // ms — latency above this = degraded
-const FAILS_TO_DOWN   = 3;                   // consecutive fails before flipping to down
-const OKS_TO_UP       = 3;                   // consecutive oks before flipping back to up
+const INTERVAL_CRON      = '*/30 * * * * *';        // every 30 seconds
+const TARGET_REFRESH_MS  = 5 * 60 * 1000;            // refresh targets every 5 min
+const PROBE_TIMEOUT      = 5000;                     // default ms
+const DEGRADED_AFTER     = 500;                      // default ms
+const FAILS_TO_DOWN      = 3;                        // default consecutive fails
+const OKS_TO_UP          = 3;                        // consecutive OKs to flip up
 
 
 // ============================================================
-// TARGETS
+// STATIC TARGETS — infrastructure, always monitored
 // ============================================================
-const TARGETS = [
-  { id: 'cloudboard-db',  name: 'Cloudboard Postgres', kind: 'postgres' },
-  { id: 'cloudboard-web', name: 'Cloudboard Web',      kind: 'http'     },
+// These NEVER come from the projects table. If the DB is down,
+// we still want to see the DB card and the Cloudboard card.
+// ============================================================
+const STATIC_TARGETS = [
+  {
+    id: 'cloudboard-db',
+    name: 'Cloudboard Postgres',
+    kind: 'postgres',
+    degradedAfterMs: 800,
+    failsToDown: 3,
+  },
+  {
+    id: 'cloudboard-web',
+    name: 'Cloudboard Web',
+    kind: 'http',
+    url: `http://localhost:${process.env.PORT || 5000}/health`,
+    degradedAfterMs: 500,
+    timeoutMs: 5000,
+    failsToDown: 3,
+  },
 ];
 
 
 // ============================================================
 // IN-MEMORY STATE
 // ============================================================
-// For each target we track:
-//   status        — current verdict: 'up' | 'degraded' | 'down' | 'unknown'
-//   since         — epoch ms when the current status began
-//   latency       — ms of the most recent probe
-//   error         — most recent error message, or null
-//   lastChecked   — epoch ms of the most recent probe
-//   consecutiveFails — count of consecutive probe failures
-//   consecutiveOks   — count of consecutive probe successes
-//
-// `status` flips only when the debounce thresholds are crossed.
-// `latency` / `error` / `lastChecked` update every tick regardless,
-// so the UI always shows fresh numbers even when status is stable.
+// Keyed by target id. Each entry carries the current verdict,
+// the last probe results, and a reference to its target config
+// (so probes and thresholds can read per-target settings).
 // ============================================================
 const state = {};
-for (const t of TARGETS) {
-  state[t.id] = {
-    id: t.id,
-    name: t.name,
-    status: 'unknown',
-    since: null,
-    latency: null,
-    error: null,
-    lastChecked: null,
-    consecutiveFails: 0,
-    consecutiveOks: 0,
-  };
+
+let dynamicTargets = [];            // last successfully loaded list
+let lastTargetRefresh = 0;          // epoch ms of last successful refresh
+
+
+// ============================================================
+// HOST CLASSIFICATION
+// ============================================================
+function classifyHost(url) {
+  let host = '';
+  try { host = new URL(url).hostname; } catch (_) {}
+
+  if (host.endsWith('.vercel.app')) {
+    return { degradedAfterMs: 800,  timeoutMs: 5000,  failsToDown: 3 };
+  }
+  if (host.endsWith('.onrender.com')) {
+    // Render free tier sleeps after 15 min idle → 30–60s cold start.
+    // Tolerate: longer timeout, higher degraded threshold, more fails
+    // before declaring down.
+    return { degradedAfterMs: 3000, timeoutMs: 15000, failsToDown: 5 };
+  }
+  if (host.endsWith('.netlify.app')) {
+    return { degradedAfterMs: 800,  timeoutMs: 5000,  failsToDown: 3 };
+  }
+  // Custom domains, unknown hosts — mid-range defaults
+  return { degradedAfterMs: 1500, timeoutMs: 8000, failsToDown: 3 };
+}
+
+
+// ============================================================
+// DYNAMIC TARGET REFRESH
+// ============================================================
+async function refreshDynamicTargets() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, client, live_url, status, project_type
+         FROM projects
+        WHERE live_url IS NOT NULL
+          AND live_url != ''
+          AND status IN ('Live', 'Maintenance')
+          AND live_url NOT LIKE '%eaglevision-cloudboard%'
+        ORDER BY name`
+    );
+
+    const mapped = rows.map((r) => {
+      const cleanUrl = (r.live_url || '').split('#')[0];   // strip hash fragments
+      const hostCfg  = classifyHost(cleanUrl);
+      return {
+        id:   `project-${r.id}`,
+        name: r.name?.trim() || `Project ${r.id}`,
+        kind: 'http',
+        url:  cleanUrl,
+        client: r.client || null,
+        projectId: r.id,
+        degradedAfterMs: hostCfg.degradedAfterMs,
+        timeoutMs:      hostCfg.timeoutMs,
+        failsToDown:    hostCfg.failsToDown,
+      };
+    });
+
+    // Detect changes for logging
+    const before = new Set(dynamicTargets.map((t) => t.id));
+    const after  = new Set(mapped.map((t) => t.id));
+    const added   = [...after].filter((id) => !before.has(id));
+    const removed = [...before].filter((id) => !after.has(id));
+
+    dynamicTargets = mapped;
+
+    if (added.length || removed.length) {
+      console.log(`[monitor] targets refreshed: +${added.length} -${removed.length} (total dynamic: ${mapped.length})`);
+      if (added.length)   console.log(`[monitor]   added: ${added.join(', ')}`);
+      if (removed.length) console.log(`[monitor]   removed: ${removed.join(', ')}`);
+    }
+
+    syncStateWithTargets([...STATIC_TARGETS, ...dynamicTargets]);
+  } catch (err) {
+    // Keep the last-known list — don't wipe targets on a DB hiccup
+    console.error('[monitor] target refresh failed (keeping last list):', err.message);
+    syncStateWithTargets([...STATIC_TARGETS, ...dynamicTargets]);
+  }
+}
+
+
+// ============================================================
+// STATE SYNC
+// ============================================================
+function syncStateWithTargets(allTargets) {
+  const wanted = new Set(allTargets.map((t) => t.id));
+
+  // Add new / update existing
+  for (const t of allTargets) {
+    if (!state[t.id]) {
+      state[t.id] = {
+        id: t.id,
+        name: t.name,
+        status: 'unknown',
+        since: null,
+        latency: null,
+        error: null,
+        lastChecked: null,
+        consecutiveFails: 0,
+        consecutiveOks: 0,
+        _config: t,
+      };
+    } else {
+      // Update config and name in case they changed
+      state[t.id]._config = t;
+      state[t.id].name = t.name;
+    }
+  }
+
+  // Remove targets no longer wanted
+  for (const id of Object.keys(state)) {
+    if (!wanted.has(id)) {
+      delete state[id];
+    }
+  }
 }
 
 
 // ============================================================
 // PROBES
 // ============================================================
-async function probeDB() {
+async function probeDB(target) {
   const start = Date.now();
   try {
     await pool.query('SELECT 1');
@@ -85,12 +209,13 @@ async function probeDB() {
   }
 }
 
-async function probeWeb() {
+async function probeHttp(target) {
   const start = Date.now();
-  const port = process.env.PORT || 5000;
+  const timeout = target.timeoutMs ?? PROBE_TIMEOUT;
   try {
-    const res = await fetch(`http://localhost:${port}/health`, {
-      signal: AbortSignal.timeout(PROBE_TIMEOUT),
+    const res = await fetch(target.url, {
+      signal: AbortSignal.timeout(timeout),
+      redirect: 'follow',
     });
     return {
       ok: res.ok,
@@ -102,31 +227,34 @@ async function probeWeb() {
   }
 }
 
+function probeTarget(target) {
+  return target.kind === 'postgres' ? probeDB(target) : probeHttp(target);
+}
+
 
 // ============================================================
 // STATE MACHINE
 // ============================================================
 /**
  * Apply one probe result to one target's state.
- * Returns true if `status` changed, false otherwise.
+ * Returns true if the STATUS changed, false otherwise.
  *
- * Rules:
- *   • Probe failed → increment fails, reset oks.
- *     - status flips to 'down' when fails >= FAILS_TO_DOWN
- *   • Probe succeeded → increment oks, reset fails.
- *     - status flips to 'up' when oks >= OKS_TO_UP AND current is not 'up'
- *     - but if latency > DEGRADED_AFTER, immediate flip to 'degraded'
- *       (degraded is not a "failure" — it's a health signal)
+ * Per-target thresholds come from `target`:
+ *   - target.degradedAfterMs   (default DEGRADED_AFTER)
+ *   - target.failsToDown       (default FAILS_TO_DOWN)
  */
-function applyProbe(entry, probe) {
+function applyProbe(entry, probe, target) {
   const previous = entry.status;
   const now = Date.now();
+
+  const degradedAfter = target?.degradedAfterMs ?? DEGRADED_AFTER;
+  const failsToDown   = target?.failsToDown     ?? FAILS_TO_DOWN;
 
   if (!probe.ok) {
     entry.consecutiveFails += 1;
     entry.consecutiveOks = 0;
 
-    if (entry.consecutiveFails >= FAILS_TO_DOWN && entry.status !== 'down') {
+    if (entry.consecutiveFails >= failsToDown && entry.status !== 'down') {
       entry.status = 'down';
       entry.since = now;
     }
@@ -134,16 +262,12 @@ function applyProbe(entry, probe) {
     entry.consecutiveOks += 1;
     entry.consecutiveFails = 0;
 
-    // Latency-driven degraded is immediate — no debounce needed
-    if (probe.latency > DEGRADED_AFTER) {
+    if (probe.latency > degradedAfter) {
       if (entry.status !== 'degraded') {
         entry.status = 'degraded';
         entry.since = now;
       }
     } else {
-      // Healthy latency. Only promote back to 'up' after OKS_TO_UP.
-      // Special case: if we're at 'unknown', accept the first probe
-      // immediately — no reason to wait 3 ticks to say "up".
       const isFirstVerdict = entry.status === 'unknown';
       const enoughOks = entry.consecutiveOks >= OKS_TO_UP;
 
@@ -154,7 +278,6 @@ function applyProbe(entry, probe) {
     }
   }
 
-  // Always refresh fresh data
   entry.latency     = probe.latency;
   entry.error       = probe.error || null;
   entry.lastChecked = now;
@@ -166,15 +289,6 @@ function applyProbe(entry, probe) {
 // ============================================================
 // EVENT LOG
 // ============================================================
-/**
- * Persist a state change to the monitoring_events table.
- * Called only when applyProbe() returns true.
- *
- * Never throws — a failed log write should not kill the tick.
- * Note: this is fire-and-forget. If the DB itself is the target
- * that went down, the INSERT will fail; the state cache still
- * reflects reality, only the historical record is missing.
- */
 async function recordEvent(entry, fromStatus) {
   try {
     await pool.query(
@@ -199,50 +313,47 @@ async function recordEvent(entry, fromStatus) {
 // ONE TICK
 // ============================================================
 async function tick() {
-  const [db, web] = await Promise.all([probeDB(), probeWeb()]);
-
-  // Capture previous statuses BEFORE applying the new probes,
-  // since applyProbe mutates entry.status in place.
-  const prevDb  = state['cloudboard-db'].status;
-  const prevWeb = state['cloudboard-web'].status;
-
-  const dbChanged  = applyProbe(state['cloudboard-db'],  db);
-  const webChanged = applyProbe(state['cloudboard-web'], web);
-
-  const fmt = (s) => `${s.status}(${s.latency}ms)`;
-  const flag = (changed) => (changed ? ' ⚠' : '');
-
-  console.log(
-    `[monitor] db=${fmt(state['cloudboard-db'])}${flag(dbChanged)}` +
-    `  web=${fmt(state['cloudboard-web'])}${flag(webChanged)}`
-  );
-
-  // Snapshot for broadcast — computed once, used below.
-  // Strip internal debounce counters before putting on the wire.
-  const publicState = getPublicState();
-
-  // Persist state changes — fire and forget so a DB hiccup
-  // doesn't stall the next tick.
-  if (dbChanged)  recordEvent(state['cloudboard-db'],  prevDb);
-  if (webChanged) recordEvent(state['cloudboard-web'], prevWeb);
-
-  // Broadcast to WebSocket clients — also fire-and-forget.
-  // broadcast() returns 0 when no clients are connected, so this
-  // is a no-op cost when nobody is watching.
-  if (dbChanged) {
-    broadcastStatusChange(
-      publicState['cloudboard-db'],
-      prevDb,
-      state['cloudboard-db'].status
-    );
+  // Refresh dynamic targets every 5 minutes
+  if (Date.now() - lastTargetRefresh > TARGET_REFRESH_MS) {
+    await refreshDynamicTargets();
+    lastTargetRefresh = Date.now();
   }
-  if (webChanged) {
-    broadcastStatusChange(
-      publicState['cloudboard-web'],
-      prevWeb,
-      state['cloudboard-web'].status
-    );
+
+  // Snapshot current targets
+  const targets = Object.values(state)
+    .map((e) => e._config)
+    .filter(Boolean);
+
+  if (targets.length === 0) {
+    console.log('[monitor] no targets yet');
+    return;
   }
+
+  // Probe all in parallel
+  const results = await Promise.all(targets.map(probeTarget));
+
+  // Apply, log, broadcast
+  const line = [];
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    const r = results[i];
+    const entry = state[t.id];
+    if (!entry) continue;
+
+    const prev = entry.status;
+    const changed = applyProbe(entry, r, t);
+
+    const flag = changed ? ' ⚠' : '';
+    line.push(`${t.id}=${entry.status}(${entry.latency}ms)${flag}`);
+
+    if (changed) {
+      recordEvent(entry, prev);
+      const publicEntry = getPublicState()[t.id];
+      broadcastStatusChange(publicEntry, prev, entry.status);
+    }
+  }
+
+  console.log(`[monitor] ${line.join('  ')}`);
 }
 
 
@@ -262,8 +373,9 @@ function startMonitoringCron() {
     }
   });
 
-  console.log(`[monitor] cron started (every 30s, debounce ${FAILS_TO_DOWN} fails → down)`);
+  console.log(`[monitor] cron started (every 30s, ${FAILS_TO_DOWN} fails → down by default)`);
 
+  // Kick off an immediate tick — the first one loads dynamic targets
   tick().catch((err) => console.error('[monitor] initial tick failed:', err.message));
 
   return task;
@@ -286,8 +398,8 @@ function getState() {
 }
 
 /**
- * Shape the state for API consumers — strip internal debounce counters.
- * Returns a plain object keyed by target id.
+ * Shape the state for API + WS consumers.
+ * Strips internal counters and the target config.
  */
 function getPublicState() {
   const out = {};
