@@ -3,11 +3,12 @@
 // ============================================================
 // Infrastructure + project health monitor.
 //
-//   • Every 30s: probe every known target in parallel
+//   • Every 30s: probe every due target in parallel
 //   • Every 5 min: refresh the dynamic target list from `projects`
 //   • Debounce: N consecutive fails → down (N varies by host)
 //   • Debounce: 3 consecutive OKs → up
 //   • Latency > per-host threshold → degraded (immediate)
+//   • HTTP 429 / 5xx → forced degraded (transient, not down)
 //   • State changes → monitoring_events + WebSocket broadcast
 //
 // Static targets (infrastructure):
@@ -17,8 +18,8 @@
 // Dynamic targets (project homepages):
 //   • Sourced from `projects` table where status IN ('Live','Maintenance')
 //   • Refreshed every 5 min. Keeps last-known list if refresh fails.
-//   • Per-host thresholds: Vercel fast, Render tolerant (cold starts),
-//     custom domains mid-range.
+//   • Per-host thresholds: Vercel fast, Render tolerant (cold starts
+//     AND rate limits → 60s cadence), custom domains mid-range.
 //
 // Note: homepage probes only detect "HTML loads". A project whose
 // frontend loads but whose backend is broken will show as UP. To
@@ -55,6 +56,7 @@ const STATIC_TARGETS = [
     kind: 'postgres',
     degradedAfterMs: 800,
     failsToDown: 3,
+    probeEveryNTicks: 1,
   },
   {
     id: 'cloudboard-web',
@@ -64,6 +66,7 @@ const STATIC_TARGETS = [
     degradedAfterMs: 500,
     timeoutMs: 5000,
     failsToDown: 3,
+    probeEveryNTicks: 1,
   },
 ];
 
@@ -79,29 +82,39 @@ const state = {};
 
 let dynamicTargets = [];            // last successfully loaded list
 let lastTargetRefresh = 0;          // epoch ms of last successful refresh
+let tickCounter = 0;                // increments on every tick
 
 
 // ============================================================
 // HOST CLASSIFICATION
+// ============================================================
+// Returns host-specific thresholds AND cadence.
+//
+// `probeEveryNTicks` controls how often the target is probed:
+//   • 1 → probed every tick (30s)
+//   • 2 → probed every other tick (60s)
+//
+// Render free tier rate-limits requests. Probing every 30s can
+// trigger HTTP 429. 60s cadence stays well under the limit.
 // ============================================================
 function classifyHost(url) {
   let host = '';
   try { host = new URL(url).hostname; } catch (_) {}
 
   if (host.endsWith('.vercel.app')) {
-    return { degradedAfterMs: 800,  timeoutMs: 5000,  failsToDown: 3 };
+    return { degradedAfterMs: 800,  timeoutMs: 5000,  failsToDown: 3, probeEveryNTicks: 1 };
   }
   if (host.endsWith('.onrender.com')) {
-    // Render free tier sleeps after 15 min idle → 30–60s cold start.
-    // Tolerate: longer timeout, higher degraded threshold, more fails
-    // before declaring down.
-    return { degradedAfterMs: 3000, timeoutMs: 15000, failsToDown: 5 };
+    // Render free tier sleeps after 15 min idle → 30–60s cold start,
+    // AND rate-limits at ~100 req/hour. Tolerate cold starts with a
+    // longer timeout, and halve the probe rate to avoid 429s.
+    return { degradedAfterMs: 3000, timeoutMs: 15000, failsToDown: 5, probeEveryNTicks: 2 };
   }
   if (host.endsWith('.netlify.app')) {
-    return { degradedAfterMs: 800,  timeoutMs: 5000,  failsToDown: 3 };
+    return { degradedAfterMs: 800,  timeoutMs: 5000,  failsToDown: 3, probeEveryNTicks: 1 };
   }
   // Custom domains, unknown hosts — mid-range defaults
-  return { degradedAfterMs: 1500, timeoutMs: 8000, failsToDown: 3 };
+  return { degradedAfterMs: 1500, timeoutMs: 8000, failsToDown: 3, probeEveryNTicks: 1 };
 }
 
 
@@ -133,6 +146,7 @@ async function refreshDynamicTargets() {
         degradedAfterMs: hostCfg.degradedAfterMs,
         timeoutMs:      hostCfg.timeoutMs,
         failsToDown:    hostCfg.failsToDown,
+        probeEveryNTicks: hostCfg.probeEveryNTicks,
       };
     });
 
@@ -209,18 +223,53 @@ async function probeDB(target) {
   }
 }
 
+/**
+ * Probe an HTTP(S) URL.
+ *
+ * Response classification:
+ *   2xx                     → ok, up
+ *   429 (Too Many Requests) → ok=true, forceDegraded (transient, not down)
+ *   5xx (server error)      → ok=true, forceDegraded (transient, not down)
+ *   4xx (except 429)        → ok=false, error — real client error
+ *   network error / timeout → ok=false, error
+ *
+ * `forceDegraded` tells applyProbe() to flip the target to 'degraded'
+ * instead of counting the probe as a failure.
+ */
 async function probeHttp(target) {
   const start = Date.now();
   const timeout = target.timeoutMs ?? PROBE_TIMEOUT;
+
   try {
     const res = await fetch(target.url, {
       signal: AbortSignal.timeout(timeout),
       redirect: 'follow',
     });
+
+    const latency = Date.now() - start;
+
+    // Happy path
+    if (res.ok) {
+      return { ok: true, latency };
+    }
+
+    // Transient — rate limit or server-side hiccup.
+    // The site is alive and responding; it just won't answer *now*.
+    // Report degraded, not down.
+    if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
+      return {
+        ok: true,
+        latency,
+        error: `HTTP ${res.status} (transient)`,
+        forceDegraded: true,
+      };
+    }
+
+    // 4xx other than 429 — a real client error (404, 403, etc.)
     return {
-      ok: res.ok,
-      latency: Date.now() - start,
-      error: res.ok ? null : `HTTP ${res.status}`,
+      ok: false,
+      latency,
+      error: `HTTP ${res.status}`,
     };
   } catch (err) {
     return { ok: false, latency: Date.now() - start, error: err.message };
@@ -242,6 +291,11 @@ function probeTarget(target) {
  * Per-target thresholds come from `target`:
  *   - target.degradedAfterMs   (default DEGRADED_AFTER)
  *   - target.failsToDown       (default FAILS_TO_DOWN)
+ *
+ * A probe result may carry `forceDegraded: true` (set by probeHttp
+ * for transient responses like HTTP 429 / 5xx). When present, the
+ * status flips to 'degraded' immediately — the probe is not counted
+ * as a failure, and does not trigger the down-debounce.
  */
 function applyProbe(entry, probe, target) {
   const previous = entry.status;
@@ -251,6 +305,7 @@ function applyProbe(entry, probe, target) {
   const failsToDown   = target?.failsToDown     ?? FAILS_TO_DOWN;
 
   if (!probe.ok) {
+    // Real failure — count it, and flip to down after enough in a row
     entry.consecutiveFails += 1;
     entry.consecutiveOks = 0;
 
@@ -259,15 +314,27 @@ function applyProbe(entry, probe, target) {
       entry.since = now;
     }
   } else {
+    // Success — reset the failure counter
     entry.consecutiveOks += 1;
     entry.consecutiveFails = 0;
 
-    if (probe.latency > degradedAfter) {
+    if (probe.forceDegraded) {
+      // Transient signal (429 / 5xx) — degrade, but don't wait for
+      // three successful probes to recover.
+      if (entry.status !== 'degraded') {
+        entry.status = 'degraded';
+        entry.since = now;
+      }
+    } else if (probe.latency > degradedAfter) {
+      // Slow but responding — immediate degraded
       if (entry.status !== 'degraded') {
         entry.status = 'degraded';
         entry.since = now;
       }
     } else {
+      // Healthy latency. Only promote to 'up' after OKS_TO_UP
+      // consecutive healthy probes — unless this is the first
+      // verdict (unknown → up on the very first probe).
       const isFirstVerdict = entry.status === 'unknown';
       const enoughOks = entry.consecutiveOks >= OKS_TO_UP;
 
@@ -313,29 +380,40 @@ async function recordEvent(entry, fromStatus) {
 // ONE TICK
 // ============================================================
 async function tick() {
+  tickCounter += 1;
+
   // Refresh dynamic targets every 5 minutes
   if (Date.now() - lastTargetRefresh > TARGET_REFRESH_MS) {
     await refreshDynamicTargets();
     lastTargetRefresh = Date.now();
   }
 
-  // Snapshot current targets
-  const targets = Object.values(state)
+  // Snapshot every known target
+  const allTargets = Object.values(state)
     .map((e) => e._config)
     .filter(Boolean);
 
-  if (targets.length === 0) {
+  if (allTargets.length === 0) {
     console.log('[monitor] no targets yet');
     return;
   }
 
-  // Probe all in parallel
-  const results = await Promise.all(targets.map(probeTarget));
+  // Pick the targets due on this tick
+  // (skip targets whose probeEveryNTicks means "not this time")
+  const dueTargets = allTargets.filter((t) => {
+    const every = t.probeEveryNTicks ?? 1;
+    return tickCounter % every === 0;
+  });
+
+  if (dueTargets.length === 0) return;
+
+  // Probe them all in parallel
+  const results = await Promise.all(dueTargets.map(probeTarget));
 
   // Apply, log, broadcast
   const line = [];
-  for (let i = 0; i < targets.length; i++) {
-    const t = targets[i];
+  for (let i = 0; i < dueTargets.length; i++) {
+    const t = dueTargets[i];
     const r = results[i];
     const entry = state[t.id];
     if (!entry) continue;
