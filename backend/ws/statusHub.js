@@ -22,10 +22,18 @@
 //   handshake. We do NOT currently verify it — the /ws endpoint is
 //   treated like /health: public. If you later want to gate it,
 //   check req.headers.cookie for your session cookie here.
+//
+// Circular-dependency note:
+//   monitoringCron.js requires broadcastStatusChange from this file,
+//   and this file requires getPublicState from monitoringCron.js.
+//   If both files destructured each other at the top, one of them
+//   would see `undefined` at call time (Node's require-cache returns
+//   the partially-populated exports of the module still loading).
+//   Solution: this file requires monitoringCron lazily, at call time,
+//   via the getMonitorState() helper below.
 // ============================================================
 
 const { WebSocketServer } = require('ws');
-const { getPublicState } = require('../jobs/monitoringCron');
 
 
 // ============================================================
@@ -48,6 +56,16 @@ function getAllowedOrigins() {
     return env.split(',').map((s) => s.trim()).filter(Boolean);
   }
   return DEFAULT_ORIGINS;
+}
+
+
+// ============================================================
+// LAZY REQUIRES — break circular dependency with monitoringCron
+// ============================================================
+// Do NOT convert these to top-of-file destructured requires.
+// See "Circular-dependency note" at the top of the file.
+function getMonitorState() {
+  return require('../jobs/monitoringCron').getPublicState();
 }
 
 
@@ -85,7 +103,7 @@ function isOriginAllowed(origin) {
 // BROADCAST
 // ============================================================
 function broadcast(message) {
-  if (!wss) return;
+  if (!wss) return 0;
   const payload = JSON.stringify(message);
   let sent = 0;
   for (const client of wss.clients) {
@@ -137,18 +155,24 @@ function broadcastTick() {
 function attachStatusHub(server) {
   if (wss) return wss;
 
-  wss = new WebSocketServer({
-    server,
-    path: '/ws',
+  try {
+    wss = new WebSocketServer({
+      server,
+      path: '/ws',
 
-    // Reject unknown origins during the HTTP upgrade, before
-    // the socket is created. This mirrors the CORS middleware.
-    verifyClient: ({ origin }, done) => {
-      if (isOriginAllowed(origin)) return done(true);
-      console.warn(`[ws] rejected connection from origin: ${origin || '(none)'}`);
-      return done(false, 403, 'Forbidden');
-    },
-  });
+      // Reject unknown origins during the HTTP upgrade, before
+      // the socket is created. This mirrors the CORS middleware.
+      verifyClient: ({ origin }, done) => {
+        if (isOriginAllowed(origin)) return done(true);
+        console.warn(`[ws] rejected connection from origin: ${origin || '(none)'}`);
+        return done(false, 403, 'Forbidden');
+      },
+    });
+  } catch (err) {
+    console.error('[ws] WebSocketServer construction failed:', err.message);
+    console.error(err.stack);
+    throw err;
+  }
 
   console.log('[ws] status hub attached at /ws');
 
@@ -164,7 +188,7 @@ function attachStatusHub(server) {
     try {
       ws.send(JSON.stringify({
         type: 'snapshot',
-        targets: getPublicState(),
+        targets: getMonitorState(),
         ts: Date.now(),
       }));
     } catch (err) {
