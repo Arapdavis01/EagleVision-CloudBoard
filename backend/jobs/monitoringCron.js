@@ -7,19 +7,18 @@
 //
 // SEPARATE from jobs/uptimeCron.js (client-facing, every 5 min).
 //
-// Step 3 scope:
+// Step 4 scope:
 //   • Debounce: 3 consecutive failures → down
 //   • Debounce: 3 consecutive successes → up
 //   • Latency > DEGRADED_AFTER → degraded (immediate, no debounce)
 //   • State machine keeps `since` (when the current status began)
 //   • State changes persisted to monitoring_events table
-//
-// NOT in Step 3 (later):
-//   • WebSocket broadcast
+//   • State changes broadcast over WebSocket via ws/statusHub.js
 // ============================================================
 
 const cron = require('node-cron');
 const pool = require('../config/db');
+const { broadcastStatusChange } = require('../ws/statusHub');
 
 
 // ============================================================
@@ -218,10 +217,32 @@ async function tick() {
     `  web=${fmt(state['cloudboard-web'])}${flag(webChanged)}`
   );
 
+  // Snapshot for broadcast — computed once, used below.
+  // Strip internal debounce counters before putting on the wire.
+  const publicState = getPublicState();
+
   // Persist state changes — fire and forget so a DB hiccup
   // doesn't stall the next tick.
   if (dbChanged)  recordEvent(state['cloudboard-db'],  prevDb);
   if (webChanged) recordEvent(state['cloudboard-web'], prevWeb);
+
+  // Broadcast to WebSocket clients — also fire-and-forget.
+  // broadcast() returns 0 when no clients are connected, so this
+  // is a no-op cost when nobody is watching.
+  if (dbChanged) {
+    broadcastStatusChange(
+      publicState['cloudboard-db'],
+      prevDb,
+      state['cloudboard-db'].status
+    );
+  }
+  if (webChanged) {
+    broadcastStatusChange(
+      publicState['cloudboard-web'],
+      prevWeb,
+      state['cloudboard-web'].status
+    );
+  }
 }
 
 
