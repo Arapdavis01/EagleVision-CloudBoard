@@ -34,6 +34,7 @@ const uploadRoutes          = require('./routes/upload');
 const servicePlanRoutes     = require('./routes/servicePlans');
 const systemRequestRoutes   = require('./routes/systemRequests');
 const publicRequestRoutes   = require('./routes/publicRequests');
+const monitoringRoutes      = require('./routes/monitoring');
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -127,6 +128,7 @@ app.use('/api/upload',          uploadRoutes);
 app.use('/api/service-plans',   servicePlanRoutes);
 app.use('/api/system-requests', systemRequestRoutes);
 app.use('/api/public',          publicRequestRoutes);
+app.use('/api/monitoring',      monitoringRoutes);
 
 // Health check — kept minimal (used by Render + frontend warm-up)
 app.get('/health', (req, res) => res.status(200).send('OK'));
