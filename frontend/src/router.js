@@ -26,6 +26,7 @@ import { servicePlannerPage } from './pages/servicePlanner/servicePlanner.js';
 import { clientRequestsPage } from './pages/clientRequests/clientRequests.js';
 import { approveLoginPage }   from './pages/approveLogin/approveLogin.js';
 import { publicStatusPage }   from './pages/public-status/public.js';
+import { monitoringPage }     from './pages/monitoring/monitoring.js';
 import { initCustomSelects }  from './components/customSelect.js';
 
 import { authService }        from './services/authService.js';
@@ -64,14 +65,22 @@ if (FEATURES.publicStatus) {
   };
 }
 
+// Monitoring page — gated by FEATURES.monitoring
+if (FEATURES.monitoring) {
+  routes[ROUTES.MONITORING] = {
+    loader: monitoringPage,
+    title: 'Monitoring',
+  };
+}
+
 const DEFAULT_ROUTE = ROUTES.DASHBOARD;
 
 // Page-specific body classes (added while that route is active)
 const PAGE_BODY_CLASSES = {
-  [ROUTES.DASHBOARD]: 'page-dashboard',
-  [ROUTES.PROJECTS]:  'page-projects',
-  [ROUTES.FINANCE]:   'page-finance',
-  // add more as needed
+  [ROUTES.DASHBOARD]:  'page-dashboard',
+  [ROUTES.PROJECTS]:   'page-projects',
+  [ROUTES.FINANCE]:    'page-finance',
+  [ROUTES.MONITORING]: 'page-monitoring',
 };
 
 
