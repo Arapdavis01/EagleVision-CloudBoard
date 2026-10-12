@@ -7,11 +7,12 @@
 //   3. Route modules
 //   4. Health check + 404 handler
 //   5. Error handler
-//   6. Cron + listen
+//   6. Cron + WebSocket + listen
 // ============================================================
 
 require('dotenv').config();
 
+const http          = require('http');                                              // ← STEP 4
 const express       = require('express');
 const cookieParser  = require('cookie-parser');
 const compression   = require('compression');
@@ -21,6 +22,7 @@ const cors                = require('./middleware/cors');
 const errorHandler        = require('./utils/errorHandler');
 const { startUptimeCron } = require('./jobs/uptimeCron');
 const { startMonitoringCron, stopMonitoringCron } = require('./jobs/monitoringCron');
+const { attachStatusHub, detachStatusHub } = require('./ws/statusHub');            // ← STEP 4
 
 // ---------- Route modules ----------
 const authRoutes            = require('./routes/auth');
@@ -146,9 +148,23 @@ app.use(errorHandler);
 
 
 // ============================================================
-// 9. LISTEN — then start crons
+// 9. HTTP SERVER + WEBSOCKET HUB + LISTEN
 // ============================================================
-const server = app.listen(PORT, () => {
+// Wrap the Express app in a raw http.Server so the WebSocket hub
+// can attach to the same port. `app.listen()` returns an http.Server
+// too, but hiding it inside the call means we can't pass it to
+// `attachStatusHub()` — so we build it explicitly.
+const server = http.createServer(app);                                              // ← STEP 4
+
+// Attach the WebSocket hub at /ws
+try {
+  attachStatusHub(server);                                                          // ← STEP 4
+} catch (err) {
+  console.error('[ws] failed to attach status hub:', err);
+  console.error(err.stack);
+}
+
+server.listen(PORT, () => {                                                         // ← STEP 4
   console.log(`[server] running on port ${PORT} (${IS_PROD ? 'production' : 'development'})`);
 
   // Start crons AFTER listen succeeds. If either throws, the server
@@ -171,15 +187,23 @@ const server = app.listen(PORT, () => {
 // ============================================================
 // 10. GRACEFUL SHUTDOWN
 // ============================================================
-// Stop crons first so their timers don't keep the event loop
-// alive past server.close()'s callback.
+// Stop crons and the WS hub first so their timers/sockets don't
+// keep the event loop alive past server.close()'s callback.
 const shutdown = (signal) => {
   console.log(`[server] ${signal} received, shutting down gracefully`);
+
   try {
     stopMonitoringCron();
   } catch (err) {
     console.error('[monitor] stop failed:', err);
   }
+
+  try {
+    detachStatusHub();                                                              // ← STEP 4
+  } catch (err) {
+    console.error('[ws] detach failed:', err);
+  }
+
   server.close(() => process.exit(0));
 };
 
